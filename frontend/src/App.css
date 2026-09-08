@@ -102,6 +102,8 @@ textarea { resize: vertical; }
 .data-card h3 { margin-bottom: 5px; }
 .data-card p { margin-bottom: 0; }
 .data-card.compact { border-bottom: 1px solid var(--line); margin: 0; }
+.settlement-line { color: var(--muted); font-size: .85rem; }
+.success-label { color: var(--green); font-weight: 700; }
 .status { background: #e9e4d8; color: var(--green); font-size: .72rem; padding: 5px 8px; text-transform: uppercase; }
 .status-cancelled { color: #a43d2b; }
 .inline-form { align-items: end; display: grid; grid-template-columns: 1.3fr 1fr .7fr auto; }

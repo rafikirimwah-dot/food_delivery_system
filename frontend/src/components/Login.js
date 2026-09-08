@@ -15,6 +15,7 @@ function Login() {
     try {
       const data = await apiRequest('/login', { method: 'POST', body: JSON.stringify(form) });
       saveSession(data);
+      window.dispatchEvent(new Event('auth-changed'));
       navigate('/');
     } catch (err) {
       setError(err.message);

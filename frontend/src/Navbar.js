@@ -1,14 +1,28 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 function Navbar() {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const [session, setSession] = useState(() => ({
+    token: localStorage.getItem('token'),
+    user: JSON.parse(localStorage.getItem('user') || 'null')
+  }));
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const refreshSession = () => setSession({
+      token: localStorage.getItem('token'),
+      user: JSON.parse(localStorage.getItem('user') || 'null')
+    });
+    window.addEventListener('auth-changed', refreshSession);
+    return () => window.removeEventListener('auth-changed', refreshSession);
+  }, []);
+
+  const { token, user } = session;
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    window.dispatchEvent(new Event('auth-changed'));
     navigate('/login');
   };
 

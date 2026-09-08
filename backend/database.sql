@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS orders (
     commission_rate DECIMAL(5,2) DEFAULT 10.00,
     admin_commission DECIMAL(10,2) DEFAULT 0.00,
     manager_amount DECIMAL(10,2) DEFAULT 0.00,
+    funds_released BOOLEAN DEFAULT FALSE,
+    funds_released_at TIMESTAMP NULL,
     is_delivered BOOLEAN DEFAULT FALSE,
     delivery_confirmed_at TIMESTAMP NULL,
     estimated_delivery_time DATETIME,

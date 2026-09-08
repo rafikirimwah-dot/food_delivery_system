@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
@@ -15,8 +15,21 @@ import AdminDashboard from './components/AdminDashboard';
 import ManagerDashboard from './components/ManagerDashboard';
 
 function App() {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const [session, setSession] = useState(() => ({
+    token: localStorage.getItem('token'),
+    user: JSON.parse(localStorage.getItem('user') || 'null')
+  }));
+
+  useEffect(() => {
+    const refreshSession = () => setSession({
+      token: localStorage.getItem('token'),
+      user: JSON.parse(localStorage.getItem('user') || 'null')
+    });
+    window.addEventListener('auth-changed', refreshSession);
+    return () => window.removeEventListener('auth-changed', refreshSession);
+  }, []);
+
+  const { token, user } = session;
 
   return (
     <Router>

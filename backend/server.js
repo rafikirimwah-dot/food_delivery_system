@@ -14,15 +14,20 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Database connection
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'food_delivery'
+// Use a pool so dropped MySQL connections are replaced automatically.
+const db = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'food_delivery',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0
 });
 
-db.connect((err) => {
+db.query('SELECT 1', (err) => {
     if (err) {
         console.error('Database connection failed:', err);
         return;
@@ -75,12 +80,25 @@ app.post('/api/register', async (req, res) => {
             }
             
             if (role === 'manager') {
-                const hotelQuery = 'INSERT INTO hotels (name, manager_id) VALUES (?, ?)';
-                db.query(hotelQuery, [hotelName || 'New Hotel', result.insertId], (err) => {
-                    if (err) {
-                        return res.status(400).json({ message: 'Failed to create hotel' });
+                const requestedHotel = hotelName || 'New Hotel';
+                const existingHotelQuery = 'SELECT id FROM hotels WHERE name = ? AND manager_id IS NULL LIMIT 1';
+                db.query(existingHotelQuery, [requestedHotel], (hotelLookupError, hotels) => {
+                    if (hotelLookupError) {
+                        return res.status(500).json({ message: 'Failed to assign hotel' });
                     }
-                    res.status(201).json({ message: 'Manager registered, awaiting admin approval' });
+
+                    const finishRegistration = (hotelError) => {
+                        if (hotelError) {
+                            return res.status(400).json({ message: 'Failed to assign hotel' });
+                        }
+                        res.status(201).json({ message: 'Manager registered, awaiting admin approval' });
+                    };
+
+                    if (hotels.length > 0) {
+                        db.query('UPDATE hotels SET manager_id = ? WHERE id = ?', [result.insertId, hotels[0].id], finishRegistration);
+                    } else {
+                        db.query('INSERT INTO hotels (name, manager_id) VALUES (?, ?)', [requestedHotel, result.insertId], finishRegistration);
+                    }
                 });
             } else {
                 res.status(201).json({ message: 'User registered successfully' });
@@ -182,7 +200,7 @@ app.get('/api/admin/commission-report', authenticate, authorize('admin'), (req, 
             SUM(o.admin_commission) as total_commission
         FROM hotels h
         LEFT JOIN orders o ON h.id = o.hotel_id
-        WHERE o.status = 'completed'
+        WHERE o.id IS NOT NULL
         GROUP BY h.id
     `;
     db.query(query, (err, results) => {
@@ -467,4 +485,22 @@ app.put('/api/orders/:id/confirm-delivery', authenticate, authorize('user'), (re
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+});
+
+// Release a completed order's manager funds
+app.put('/api/admin/orders/:id/release-funds', authenticate, authorize('admin'), (req, res) => {
+    db.query('UPDATE orders SET funds_released = TRUE, funds_released_at = NOW() WHERE id = ? AND status = "completed"', [req.params.id], (err, result) => {
+        if (err) return res.status(500).json({ message: 'Database error' });
+        if (result.affectedRows === 0) return res.status(400).json({ message: 'Only completed orders can release funds' });
+        res.json({ message: 'Funds released to hotel successfully' });
+    });
+});
+
+// Admin confirmation for delivery exceptions or manual reconciliation
+app.put('/api/admin/orders/:id/confirm-delivery', authenticate, authorize('admin'), (req, res) => {
+    db.query('UPDATE orders SET status = "completed", is_delivered = TRUE, delivery_confirmed_at = NOW() WHERE id = ?', [req.params.id], (err, result) => {
+        if (err) return res.status(500).json({ message: 'Database error' });
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Order not found' });
+        res.json({ message: 'Delivery confirmed successfully' });
+    });
 });
