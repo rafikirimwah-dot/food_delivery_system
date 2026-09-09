@@ -16,7 +16,11 @@ function Login() {
       const data = await apiRequest('/login', { method: 'POST', body: JSON.stringify(form) });
       saveSession(data);
       window.dispatchEvent(new Event('auth-changed'));
-      navigate('/');
+
+      const role = data?.user?.role;
+      if (role === 'admin') navigate('/admin');
+      else if (role === 'manager') navigate('/manager');
+      else navigate('/');
     } catch (err) {
       setError(err.message);
     } finally {

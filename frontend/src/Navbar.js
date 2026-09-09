@@ -1,61 +1,95 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { FaBars, FaShoppingCart, FaUser, FaSignOutAlt } from 'react-icons/fa';
+import { CartContext } from './context/CartContext';
+import './components/Navbar.css';
 
 function Navbar() {
-  const [session, setSession] = useState(() => ({
-    token: localStorage.getItem('token'),
-    user: JSON.parse(localStorage.getItem('user') || 'null')
-  }));
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const refreshSession = () => setSession({
-      token: localStorage.getItem('token'),
-      user: JSON.parse(localStorage.getItem('user') || 'null')
-    });
-    window.addEventListener('auth-changed', refreshSession);
-    return () => window.removeEventListener('auth-changed', refreshSession);
-  }, []);
-
-  const { token, user } = session;
+  const cartContext = useContext(CartContext);
+  const cartCount = cartContext?.cartCount ?? 0;
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.dispatchEvent(new Event('auth-changed'));
     navigate('/login');
+    window.location.reload();
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+    document.body.style.overflow = isSidebarOpen ? 'auto' : 'hidden';
   };
 
   return (
-    <nav className="navbar">
-      <div className="nav-container">
-        <Link to="/" className="nav-logo">Food Delivery</Link>
-        <ul className="nav-menu">
-          <li><Link to="/">Home</Link></li>
-          <li><Link to="/hotels">Hotels</Link></li>
-          {token && user?.role === 'user' && (
-            <>
-              <li><Link to="/my-orders">My Orders</Link></li>
-              <li><Link to="/cart">Cart</Link></li>
-            </>
-          )}
-          {token && user?.role === 'admin' && (
-            <li><Link to="/admin">Admin Dashboard</Link></li>
-          )}
-          {token && user?.role === 'manager' && (
-            <li><Link to="/manager">Manager Dashboard</Link></li>
-          )}
-          {!token ? (
-            <>
-              <li><Link to="/login">Login</Link></li>
-              <li><Link to="/register">Register</Link></li>
-            </>
-          ) : (
-            <li><button onClick={handleLogout} className="logout-btn">Logout</button></li>
-          )}
-        </ul>
-      </div>
-    </nav>
+    <>
+      <nav className="navbar">
+        <div className="nav-container">
+          <div className="nav-left">
+            <button className="hamburger-btn" onClick={toggleSidebar}>
+              <FaBars />
+            </button>
+            <Link to="/" className="nav-logo">
+              <span className="logo-icon">🍔</span>
+              <span className="logo-text">Food<span>Delivery</span></span>
+            </Link>
+          </div>
+
+          <div className="nav-center">
+            <div className="search-bar">
+              <input type="text" placeholder="Search for restaurants or dishes..." />
+              <button className="search-btn">Search</button>
+            </div>
+          </div>
+
+          <div className="nav-right">
+            {token && user?.role === 'user' && (
+              <Link to="/cart" className="nav-cart">
+                <FaShoppingCart />
+                {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
+              </Link>
+            )}
+
+            <div className="user-dropdown">
+              <button 
+                className="user-btn"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <FaUser />
+                {token && <span>{user?.name?.split(' ')[0]}</span>}
+              </button>
+              
+              {isDropdownOpen && (
+                <div className="dropdown-menu">
+                  {!token ? (
+                    <>
+                      <Link to="/login" className="dropdown-item">Login</Link>
+                      <Link to="/register" className="dropdown-item">Register</Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link to={user?.role === 'admin' ? '/admin' : 
+                               user?.role === 'manager' ? '/manager' : 
+                               '/my-orders'} 
+                            className="dropdown-item">
+                        Dashboard
+                      </Link>
+                      <button onClick={handleLogout} className="dropdown-item logout-btn">
+                        <FaSignOutAlt /> Logout
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </nav>
+    </>
   );
 }
 

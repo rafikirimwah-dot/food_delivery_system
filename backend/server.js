@@ -504,3 +504,53 @@ app.put('/api/admin/orders/:id/confirm-delivery', authenticate, authorize('admin
         res.json({ message: 'Delivery confirmed successfully' });
     });
 });
+
+// Get random offer item (10% off)
+app.get('/api/offers/random', (req, res) => {
+    const query = `
+        SELECT fi.*, h.name as hotel_name, 
+               ROUND(fi.price * 0.9, 2) as discounted_price,
+               '10% OFF' as offer_label
+        FROM food_items fi
+        JOIN hotels h ON fi.hotel_id = h.id
+        WHERE fi.is_available = TRUE
+        ORDER BY RAND()
+        LIMIT 1
+    `;
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ message: 'Database error' });
+        }
+        if (results.length > 0) {
+            res.json(results[0]);
+        } else {
+            res.json(null);
+        }
+    });
+});
+
+// Get hotels by cuisine type
+app.get('/api/hotels/cuisine/:type', (req, res) => {
+    const { type } = req.params;
+    const query = 'SELECT * FROM hotels WHERE cuisine_type LIKE ? AND is_active = TRUE';
+    db.query(query, [`%${type}%`], (err, results) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ message: 'Database error' });
+        }
+        res.json(results);
+    });
+});
+
+// Get featured hotels (top rated)
+app.get('/api/hotels/featured', (req, res) => {
+    const query = 'SELECT * FROM hotels WHERE rating >= 4.0 AND is_active = TRUE ORDER BY rating DESC LIMIT 4';
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ message: 'Database error' });
+        }
+        res.json(results);
+    });
+});
