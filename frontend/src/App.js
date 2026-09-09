@@ -35,6 +35,7 @@ function App() {
     <Router>
       <div className="App">
         <Navbar />
+        <div className="app-main">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={!token ? <Login /> : <Navigate to="/" />} />
@@ -51,6 +52,7 @@ function App() {
             token && user?.role === 'manager' ? <ManagerDashboard /> : <Navigate to="/" />
           } />
         </Routes>
+        </div>
       </div>
     </Router>
   );
