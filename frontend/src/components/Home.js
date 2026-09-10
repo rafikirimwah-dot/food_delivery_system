@@ -1,80 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  FaStar, FaClock, FaMotorcycle, FaFire, FaArrowRight,
-  FaMapMarkerAlt, FaWallet, FaCrosshairs
-} from 'react-icons/fa';
+import { FaStar, FaClock, FaMotorcycle, FaArrowRight, FaMapMarkerAlt } from 'react-icons/fa';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
 import './Home.css';
 
-// Fix leaflet default icon issue
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-// Custom hotel marker
-const createHotelIcon = (color, emoji) => L.divIcon({
-  className: 'custom-marker',
+// Warm custom marker
+const makeHotelIcon = (color, emoji) => L.divIcon({
+  className: 'warm-marker',
   html: `<div style="
     background: ${color};
-    width: 42px; height: 42px;
+    width: 40px; height: 40px;
     border-radius: 50% 50% 50% 0;
     transform: rotate(-45deg);
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 20px ${color}80;
-    border: 3px solid white;
-  "><span style="transform: rotate(45deg); font-size: 1.2rem;">${emoji}</span></div>`,
-  iconSize: [42, 42],
-  iconAnchor: [21, 42],
-  popupAnchor: [0, -42]
+    box-shadow: 0 6px 20px ${color}66;
+    border: 3px solid #FFFFFF;
+  "><span style="transform: rotate(45deg); font-size: 1.1rem;">${emoji}</span></div>`,
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+  popupAnchor: [0, -40]
 });
 
 const customerIcon = L.divIcon({
   className: 'customer-marker',
   html: `<div style="
-    width: 20px; height: 20px;
-    background: #C6FF00;
+    width: 18px; height: 18px;
+    background: #C97B5F;
     border-radius: 50%;
-    border: 4px solid white;
-    box-shadow: 0 0 20px #C6FF00, 0 0 40px #C6FF0080;
-    animation: pulse-glow 2s infinite;
+    border: 3px solid #FFFFFF;
+    box-shadow: 0 4px 16px rgba(201, 123, 95, 0.5);
   "></div>`,
-  iconSize: [20, 20],
-  iconAnchor: [10, 10]
+  iconSize: [18, 18],
+  iconAnchor: [9, 9]
 });
 
 function Home() {
   const [hotels, setHotels] = useState([]);
   const [offerItem, setOfferItem] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('nearby');
   const [budget, setBudget] = useState('all');
-  const [userLocation, setUserLocation] = useState({ lat: -1.286389, lng: 36.817223 });
+  const [userLocation] = useState({ lat: -1.286389, lng: 36.817223 });
   const navigate = useNavigate();
 
   const budgetOptions = [
-    { id: 'all', label: 'All Prices', icon: '💰' },
+    { id: 'all', label: 'All Prices', icon: '🍽️' },
     { id: 'budget', label: 'Under KSh 700', icon: '🪙' },
-    { id: 'mid', label: 'KSh 700-1500', icon: '💵' },
-    { id: 'premium', label: 'KSh 1500-3000', icon: '💎' },
-    { id: 'luxury', label: 'KSh 3000+', icon: '👑' },
+    { id: 'mid', label: 'KSh 700 – 1,500', icon: '💵' },
+    { id: 'premium', label: 'KSh 1,500 – 3,000', icon: '💎' },
+    { id: 'luxury', label: 'KSh 3,000+', icon: '👑' },
   ];
-
-  useEffect(() => {
-    // Get user's location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => console.log('Location denied, using default Nairobi')
-      );
-    }
-  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -108,113 +85,92 @@ function Home() {
 
   const hotelsWithDistance = hotels.map(h => ({
     ...h,
-    distance: calculateDistance(userLocation.lat, userLocation.lng, h.latitude, h.longitude)
+    distance: calculateDistance(userLocation.lat, userLocation.lng, h.latitude || -1.286389, h.longitude || 36.817223)
   })).sort((a, b) => a.distance - b.distance);
-
-  const filteredHotels = budget === 'all' ? hotelsWithDistance : hotelsWithDistance.filter(h => {
-    const ranges = {
-      budget: [0, 700], mid: [700, 1500], premium: [1500, 3000], luxury: [3000, 100000]
-    };
-    const [min, max] = ranges[budget] || [0, 100000];
-    return h.min_price ? h.min_price >= min && h.min_price <= max : true;
-  });
 
   if (loading) {
     return (
       <div className="loading-container">
         <div className="spinner"></div>
-        <p>Warming up the kitchen...</p>
+        <p>Preparing something lovely…</p>
       </div>
     );
   }
 
+  const formatKSh = (n) => `KSh ${Math.round(parseFloat(n)).toLocaleString()}`;
+
   return (
-    <div className="home-v2">
+    <div className="home-warm">
       {/* HERO */}
-      <section className="hero-v2">
-        <div className="hero-bg">
-          <div className="hero-blob blob-1"></div>
-          <div className="hero-blob blob-2"></div>
-          <div className="hero-blob blob-3"></div>
-        </div>
+      <section className="hero-warm">
+        <div className="hero-blob hero-blob-1" />
+        <div className="hero-blob hero-blob-2" />
 
         <div className="hero-grid">
           <div className="hero-left">
-            <div className="hero-tag">
-              <span className="dot"></span>
-              <span>Delivery in 20 min · Nairobi</span>
-            </div>
-            <h1 className="hero-title">
-              Your next meal<br />
-              is <span className="gradient-text">20 minutes</span> away.
+            <span className="hero-eyebrow">
+              <span className="dot" /> Delivering across Nairobi in 20 min
+            </span>
+            <h1>
+              Your next meal is <br />
+              <em>twenty minutes</em> away.
             </h1>
-            <p className="hero-subtitle">
-              Order from 50+ local restaurants. Track your rider live. Pay with M-Pesa.
+            <p className="hero-lede">
+              Order from a curated list of local restaurants. Track your rider live.
+              Pay with M-Pesa. Arrive warm, every time.
             </p>
             <div className="hero-actions">
-              <Link to="/hotels" className="btn-hero-primary">
-                <FaFire /> Order Now
+              <Link to="/hotels" className="btn-primary-warm">
+                Browse Restaurants <FaArrowRight />
               </Link>
-              <button 
-                className="btn-hero-ghost"
-                onClick={() => document.getElementById('map-section')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                <FaMapMarkerAlt /> See Nearby Hotels
-              </button>
+              <a href="#nearby" className="btn-ghost-warm">
+                <FaMapMarkerAlt /> See Nearby
+              </a>
             </div>
             <div className="hero-trust">
               <div className="trust-avatars">
-                <div className="t-avatar" style={{background: '#FF3D68'}}>J</div>
-                <div className="t-avatar" style={{background: '#00D4FF'}}>M</div>
-                <div className="t-avatar" style={{background: '#C6FF00', color: '#000'}}>A</div>
-                <div className="t-avatar" style={{background: '#9D4EDD'}}>K</div>
+                <span style={{ background: '#C97B5F' }}>B</span>
+                <span style={{ background: '#8FA68E' }}>F</span>
+                <span style={{ background: '#D4A5A5' }}>K</span>
+                <span style={{ background: '#C9A961' }}>M</span>
               </div>
-              <div className="trust-text">
-                <strong>10,000+</strong> hungry Kenyans served
-              </div>
+              <p>Trusted by <strong>10,000+</strong> hungry Kenyans</p>
             </div>
           </div>
 
           <div className="hero-right">
-            <div className="hero-card-stack">
-              <div className="food-bubble bubble-1">🍕</div>
-              <div className="food-bubble bubble-2">🍔</div>
-              <div className="food-bubble bubble-3">🍗</div>
-              <div className="food-bubble bubble-4">🍣</div>
-              <div className="food-bubble bubble-5">🍝</div>
-
-              {offerItem && (
-                <div className="hot-deal-card">
-                  <div className="hot-badge">
-                    <FaFire /> HOT DEAL
-                  </div>
-                  <img 
-                    src={offerItem.image_url} 
+            {offerItem && (
+              <div className="hero-offer-card">
+                <span className="hero-offer-tag">Today's Special</span>
+                <div className="hero-offer-img">
+                  <img
+                    src={offerItem.image_url}
                     alt={offerItem.name}
-                    onError={(e) => e.target.src = `https://via.placeholder.com/300x200/FF3D68/ffffff?text=${offerItem.name}`}
+                    onError={(e) => e.target.src = `https://via.placeholder.com/400x300/F5EFE6/C97B5F?text=${offerItem.name}`}
                   />
-                  <div className="hot-info">
-                    <div className="hot-hotel">{offerItem.hotel_name}</div>
-                    <h4>{offerItem.name}</h4>
-                    <div className="hot-price">
-                      <span className="k-price">KSh {Math.round(offerItem.discounted_price)}</span>
-                      <span className="k-original">KSh {Math.round(offerItem.price)}</span>
-                    </div>
-                  </div>
                 </div>
-              )}
-            </div>
+                <div className="hero-offer-body">
+                  <div className="hero-offer-hotel">{offerItem.hotel_name}</div>
+                  <h3>{offerItem.name}</h3>
+                  <div className="hero-offer-prices">
+                    <span className="price-current">{formatKSh(offerItem.discounted_price)}</span>
+                    <span className="price-original">{formatKSh(offerItem.price)}</span>
+                  </div>
+                  <Link to={`/hotel/${offerItem.hotel_id}`} className="hero-offer-btn">
+                    Order Now <FaArrowRight />
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>
 
-      {/* BUDGET SELECTOR */}
-      <section className="budget-section">
-        <div className="section-head">
-          <div>
-            <h2>What's your budget today?</h2>
-            <p>We'll show you hotels that match your wallet</p>
-          </div>
+      {/* BUDGET */}
+      <section className="budget-warm">
+        <div className="sec-head">
+          <h2>What's your budget today?</h2>
+          <p>We'll show you places that match your wallet.</p>
         </div>
         <div className="budget-pills">
           {budgetOptions.map(opt => (
@@ -223,141 +179,109 @@ function Home() {
               className={`budget-pill ${budget === opt.id ? 'active' : ''}`}
               onClick={() => setBudget(opt.id)}
             >
-              <span className="pill-icon">{opt.icon}</span>
-              <span>{opt.label}</span>
+              <span>{opt.icon}</span> {opt.label}
             </button>
           ))}
         </div>
       </section>
 
-      {/* MAP SECTION */}
-      <section className="map-section" id="map-section">
-        <div className="section-head">
-          <div>
-            <h2><FaCrosshairs /> Hotels Near You</h2>
-            <p>Live map · Pinned by proximity · {hotels.length} hotels around {userLocation.lat.toFixed(3)}, {userLocation.lng.toFixed(3)}</p>
-          </div>
+      {/* MAP */}
+      <section className="map-warm" id="nearby">
+        <div className="sec-head">
+          <h2><FaMapMarkerAlt style={{ color: 'var(--terracotta)' }} /> Restaurants Near You</h2>
+          <p>Pinned by proximity · Centered on Nairobi</p>
         </div>
-
-        <div className="map-container">
-          <MapContainer 
-            center={[userLocation.lat, userLocation.lng]} 
-            zoom={13} 
-            style={{ height: '500px', width: '100%', borderRadius: '24px' }}
+        <div className="map-card">
+          <MapContainer
+            center={[userLocation.lat, userLocation.lng]}
+            zoom={12}
+            style={{ height: '480px', width: '100%' }}
             scrollWheelZoom={false}
           >
             <TileLayer
-              attribution='&copy; OpenStreetMap'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              attribution='&copy; OpenStreetMap, CartoDB'
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
             />
-            
-            {/* Customer marker */}
             <Marker position={[userLocation.lat, userLocation.lng]} icon={customerIcon}>
-              <Popup>
-                <div style={{color: '#333'}}>
-                  <strong>📍 You are here</strong>
-                </div>
-              </Popup>
+              <Popup>📍 You are here</Popup>
             </Marker>
-
-            {/* Delivery radius circle */}
-            <Circle 
+            <Circle
               center={[userLocation.lat, userLocation.lng]}
               radius={5000}
-              pathOptions={{ color: '#C6FF00', fillColor: '#C6FF00', fillOpacity: 0.05 }}
+              pathOptions={{ color: '#C97B5F', fillColor: '#C97B5F', fillOpacity: 0.08 }}
             />
-
-            {/* Hotel markers */}
             {hotelsWithDistance.map(hotel => (
-              <React.Fragment key={hotel.id}>
-                <Marker 
-                  position={[hotel.latitude, hotel.longitude]} 
-                  icon={createHotelIcon(hotel.brand_color || '#FF6B35', hotel.emoji || '🍽️')}
-                >
-                  <Popup>
-                    <div style={{color: '#333', minWidth: '180px'}}>
-                      <strong style={{fontSize: '1rem'}}>{hotel.emoji} {hotel.name}</strong>
-                      <p style={{margin: '0.3rem 0', fontSize: '0.85rem'}}>{hotel.cuisine_type}</p>
-                      <p style={{color: hotel.brand_color, fontWeight: '700', margin: '0.3rem 0'}}>
-                        {hotel.distance.toFixed(2)} km away
-                      </p>
-                      <button 
-                        onClick={() => navigate(`/hotel/${hotel.id}`)}
-                        style={{
-                          background: hotel.brand_color,
-                          color: 'white',
-                          border: 'none',
-                          padding: '0.5rem 1rem',
-                          borderRadius: '50px',
-                          cursor: 'pointer',
-                          fontWeight: '700',
-                          width: '100%',
-                          marginTop: '0.5rem'
-                        }}
-                      >
-                        Order Now
-                      </button>
-                    </div>
-                  </Popup>
-                </Marker>
-              </React.Fragment>
+              <Marker
+                key={hotel.id}
+                position={[hotel.latitude || -1.286389, hotel.longitude || 36.817223]}
+                icon={makeHotelIcon(hotel.brand_color || '#C97B5F', hotel.emoji || '🍽️')}
+              >
+                <Popup>
+                  <div style={{ minWidth: 180 }}>
+                    <strong>{hotel.emoji} {hotel.name}</strong>
+                    <p style={{ margin: '0.3rem 0', fontSize: '0.85rem', color: '#7A736A' }}>
+                      {hotel.cuisine_type} · {hotel.distance.toFixed(1)} km
+                    </p>
+                    <button
+                      onClick={() => navigate(`/hotel/${hotel.id}`)}
+                      style={{
+                        background: hotel.brand_color || '#C97B5F',
+                        color: 'white',
+                        border: 'none',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '999px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        width: '100%'
+                      }}
+                    >View Menu</button>
+                  </div>
+                </Popup>
+              </Marker>
             ))}
           </MapContainer>
         </div>
       </section>
 
-      {/* HOTELS NEARBY LIST */}
-      <section className="hotels-section-v2">
-        <div className="section-head">
-          <div>
-            <h2>🍽️ Restaurants Near You</h2>
-            <p>Sorted by distance · Budget filter applied</p>
-          </div>
+      {/* HOTELS */}
+      <section className="hotels-warm">
+        <div className="sec-head">
+          <h2>Featured Restaurants</h2>
           <Link to="/hotels" className="link-all">
-            View All <FaArrowRight />
+            View all <FaArrowRight />
           </Link>
         </div>
 
-        <div className="hotel-grid-v2">
-          {filteredHotels.map((hotel, idx) => (
-            <Link 
-              to={`/hotel/${hotel.id}`} 
-              key={hotel.id} 
-              className="hotel-card-v2"
-              style={{ 
-                '--hotel-color': hotel.brand_color,
-                animationDelay: `${idx * 0.08}s`
+        <div className="hotels-grid-warm">
+          {hotelsWithDistance.map((hotel, idx) => (
+            <Link
+              to={`/hotel/${hotel.id}`}
+              key={hotel.id}
+              className="hotel-card-warm"
+              style={{
+                '--hotel-color': hotel.brand_color || '#C97B5F',
+                animationDelay: `${idx * 60}ms`
               }}
             >
-              <div className="hc-image">
-                <img 
-                  src={`https://picsum.photos/seed/hotel${hotel.id}/500/350`} 
+              <div className="hc-image-warm">
+                <img
+                  src={`https://picsum.photos/seed/hotel${hotel.id}/500/360`}
                   alt={hotel.name}
-                  onError={(e) => e.target.src = `https://via.placeholder.com/500x350/${hotel.brand_color?.replace('#','')}/ffffff?text=${hotel.name}`}
+                  onError={(e) => e.target.src = `https://via.placeholder.com/500x360/F5EFE6/C97B5F?text=${hotel.name}`}
                 />
-                <div className="hc-overlay"></div>
-                <div className="hc-emoji">{hotel.emoji}</div>
-                <div className="hc-distance">
+                <span className="hc-emoji">{hotel.emoji || '🍽️'}</span>
+                <span className="hc-distance">
                   <FaMapMarkerAlt /> {hotel.distance.toFixed(1)} km
-                </div>
+                </span>
               </div>
-              <div className="hc-body">
-                <div className="hc-vibe" style={{background: `${hotel.brand_color}20`, color: hotel.brand_color}}>
-                  {hotel.vibe}
-                </div>
+              <div className="hc-body-warm">
+                <span className="hc-vibe">{hotel.vibe || 'Signature'}</span>
                 <h3>{hotel.name}</h3>
                 <p className="hc-cuisine">{hotel.cuisine_type}</p>
-                <p className="hc-desc">{hotel.description}</p>
-                <div className="hc-footer">
-                  <span className="hc-rating">
-                    <FaStar /> {hotel.rating}
-                  </span>
-                  <span className="hc-time">
-                    <FaClock /> 20-30 min
-                  </span>
-                  <span className="hc-delivery">
-                    <FaMotorcycle /> Free
-                  </span>
+                <div className="hc-meta-warm">
+                  <span><FaStar style={{ color: '#C9A961' }} /> {hotel.rating || 'New'}</span>
+                  <span><FaClock /> 20–30 min</span>
+                  <span><FaMotorcycle /> Free</span>
                 </div>
               </div>
             </Link>
@@ -365,31 +289,25 @@ function Home() {
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="how-section">
-        <div className="section-head center">
-          <h2>How FoodExpress Works</h2>
+      {/* HOW */}
+      <section className="how-warm">
+        <div className="sec-head center">
+          <h2>How FoodExpress works</h2>
           <p>Three steps. That's it.</p>
         </div>
         <div className="how-grid">
-          <div className="how-card">
-            <div className="how-num">01</div>
-            <div className="how-icon">📍</div>
-            <h3>Pick Nearby</h3>
-            <p>See hotels pinned on the map around you. Choose by distance, budget, or vibe.</p>
-          </div>
-          <div className="how-card">
-            <div className="how-num">02</div>
-            <div className="how-icon">🛒</div>
-            <h3>Order & Pay</h3>
-            <p>Add to cart, checkout with M-Pesa. Payment held safely by FoodExpress.</p>
-          </div>
-          <div className="how-card">
-            <div className="how-num">03</div>
-            <div className="how-icon">🛵</div>
-            <h3>Track Live</h3>
-            <p>Watch your rider on the map in real-time. Confirm delivery when it arrives.</p>
-          </div>
+          {[
+            { n: '01', icon: '📍', t: 'Pick Nearby', d: 'See hotels pinned around you. Choose by distance, budget, or vibe.' },
+            { n: '02', icon: '🛒', t: 'Order & Pay', d: 'Add to cart, pay with M-Pesa. Payment held safely by FoodExpress.' },
+            { n: '03', icon: '🛵', t: 'Track Live', d: 'Watch your rider on the map. Confirm delivery when it arrives.' },
+          ].map((s, i) => (
+            <div className="how-card-warm" key={i}>
+              <span className="how-num">{s.n}</span>
+              <span className="how-ic">{s.icon}</span>
+              <h3>{s.t}</h3>
+              <p>{s.d}</p>
+            </div>
+          ))}
         </div>
       </section>
     </div>

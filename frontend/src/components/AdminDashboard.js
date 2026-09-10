@@ -1,397 +1,265 @@
-// frontend/src/components/AdminDashboard.js
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { 
-  FaUsers, FaStore, FaShoppingBag, FaMoneyBillWave, 
-  FaChartLine, FaCheckCircle, FaTimesCircle, FaClock,
-  FaTrophy, FaFire, FaWallet 
+import {
+  FaUsers, FaStore, FaShoppingBag, FaMoneyBillWave, FaChartLine,
+  FaCheckCircle, FaClock, FaTrophy, FaFire
 } from 'react-icons/fa';
 import axios from 'axios';
 import { useToast } from './ToastContext';
 import './AdminDashboard.css';
 
 function AdminDashboard() {
-  const [pendingManagers, setPendingManagers] = useState([]);
+  const [pending, setPending] = useState([]);
   const [hotels, setHotels] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
-
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-  useEffect(() => {
-    fetchAll();
-  }, []);
+  const formatKSh = (n) => `KSh ${Math.round(parseFloat(n || 0)).toLocaleString()}`;
+
+  useEffect(() => { fetchAll(); }, []);
 
   const fetchAll = async () => {
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
-
-      const [managersRes, hotelsRes, ordersRes] = await Promise.all([
+      const [m, h, o] = await Promise.all([
         axios.get('http://localhost:5000/api/admin/pending-managers', { headers }),
         axios.get('http://localhost:5000/api/admin/hotels', { headers }),
         axios.get('http://localhost:5000/api/admin/orders', { headers })
       ]);
-
-      setPendingManagers(managersRes.data);
-      setHotels(hotelsRes.data);
-      setOrders(ordersRes.data);
+      setPending(m.data);
+      setHotels(h.data);
+      setOrders(o.data);
     } catch (err) {
-      console.error(err);
       showToast('Failed to load admin data', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const approveManager = async (id, name) => {
+  const approve = async (id, name) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
-        `http://localhost:5000/api/admin/approve-manager/${id}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.put(`http://localhost:5000/api/admin/approve-manager/${id}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       showToast(`${name} approved ✅`, 'success');
       fetchAll();
-    } catch (err) {
-      showToast('Failed to approve manager', 'error');
-    }
+    } catch { showToast('Failed to approve', 'error'); }
   };
 
-  const formatPrice = (price) => {
-    const num = typeof price === 'string' ? parseFloat(price) : price;
-    if (isNaN(num)) return 'KSh 0';
-    return `KSh ${Math.round(num).toLocaleString()}`;
-  };
+  const completed = orders.filter(o => o.status === 'completed');
+  const totalRevenue = completed.reduce((s, o) => s + parseFloat(o.total_amount || 0), 0);
+  const totalCommission = completed.reduce((s, o) => s + parseFloat(o.admin_commission || 0), 0);
+  const activeOrders = orders.filter(o => ['pending','confirmed','preparing','ready','delivered'].includes(o.status)).length;
 
-  // ============ STATS CALCULATIONS ============
-  const totalRevenue = orders
-    .filter(o => o.status === 'completed')
-    .reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
-
-  const totalCommission = orders
-    .filter(o => o.status === 'completed')
-    .reduce((sum, o) => sum + parseFloat(o.admin_commission || 0), 0);
-
-  const totalManagerPayout = orders
-    .filter(o => o.status === 'completed')
-    .reduce((sum, o) => sum + parseFloat(o.manager_amount || 0), 0);
-
-  const activeOrders = orders.filter(o => 
-    ['pending', 'confirmed', 'preparing', 'ready', 'delivered'].includes(o.status)
-  ).length;
+  const perf = hotels.map(h => {
+    const ho = completed.filter(o => o.hotel_id === h.id);
+    return {
+      ...h,
+      orderCount: ho.length,
+      revenue: ho.reduce((s, o) => s + parseFloat(o.total_amount || 0), 0)
+    };
+  }).sort((a, b) => b.revenue - a.revenue);
 
   const stats = [
-    { 
-      icon: <FaMoneyBillWave />, 
-      label: 'Total Revenue', 
-      value: formatPrice(totalRevenue), 
-      color: '#C6FF00',
-      bg: 'rgba(198,255,0,0.15)'
-    },
-    { 
-      icon: <FaWallet />, 
-      label: 'Commission Earned', 
-      value: formatPrice(totalCommission), 
-      color: '#FFB800',
-      bg: 'rgba(255,184,0,0.15)'
-    },
-    { 
-      icon: <FaShoppingBag />, 
-      label: 'Total Orders', 
-      value: orders.length, 
-      color: '#00D4FF',
-      bg: 'rgba(0,212,255,0.15)'
-    },
-    { 
-      icon: <FaStore />, 
-      label: 'Active Hotels', 
-      value: hotels.filter(h => h.is_active).length, 
-      color: '#00E676',
-      bg: 'rgba(0,230,118,0.15)'
-    }
+    { icon: <FaMoneyBillWave />, label: 'Total revenue', value: formatKSh(totalRevenue), color: 'var(--terracotta)', bg: 'var(--terracotta-tint)' },
+    { icon: <FaChartLine />, label: 'Commission earned', value: formatKSh(totalCommission), color: 'var(--gold)', bg: 'var(--gold-tint)' },
+    { icon: <FaShoppingBag />, label: 'Total orders', value: orders.length, color: 'var(--sage-dark)', bg: 'var(--sage-tint)' },
+    { icon: <FaStore />, label: 'Active hotels', value: hotels.filter(h => h.is_active).length, color: 'var(--rose-dark)', bg: 'var(--rose-tint)' }
   ];
-
-  // ============ HOTEL PERFORMANCE ============
-  const hotelPerformance = hotels.map(hotel => {
-    const hotelOrders = orders.filter(o => o.hotel_id === hotel.id && o.status === 'completed');
-    const revenue = hotelOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
-    const commission = hotelOrders.reduce((sum, o) => sum + parseFloat(o.admin_commission || 0), 0);
-    return { ...hotel, orderCount: hotelOrders.length, revenue, commission };
-  }).sort((a, b) => b.revenue - a.revenue);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <FaChartLine /> },
-    { id: 'pending', label: 'Pending Approvals', icon: <FaClock />, badge: pendingManagers.length },
-    { id: 'orders', label: 'All Orders', icon: <FaShoppingBag /> },
+    { id: 'pending', label: 'Approvals', icon: <FaClock />, badge: pending.length },
+    { id: 'orders', label: 'Orders', icon: <FaShoppingBag /> },
     { id: 'hotels', label: 'Hotels', icon: <FaStore /> }
   ];
 
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading admin dashboard...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="loading-container"><div className="spinner" /><p>Loading dashboard…</p></div>;
 
   return (
-    <div className="admin-page">
-      {/* HEADER */}
-      <div className="admin-header">
-        <div className="admin-header-left">
-          <div className="admin-badge">
-            <span className="badge-dot"></span>
-            ADMIN ACCESS
-          </div>
-          <h1>Welcome back, {user?.name?.split(' ')[0]} 👋</h1>
+    <div className="admin-page-warm">
+      <div className="admin-head-warm">
+        <div>
+          <span className="admin-badge-warm">
+            <span className="badge-dot-warm" /> ADMIN ACCESS
+          </span>
+          <h1>Welcome back, {user?.name?.split(' ')[0]}</h1>
           <p>Here's what's happening across FoodExpress today.</p>
         </div>
-        <div className="admin-header-right">
-          <div className="admin-quick-stat">
-            <FaFire style={{ color: '#FF3D68' }} />
-            <div>
-              <div className="aqs-value">{activeOrders}</div>
-              <div className="aqs-label">Active Orders</div>
-            </div>
+        <div className="admin-quick-warm">
+          <FaFire style={{ color: 'var(--terracotta)' }} />
+          <div>
+            <div className="aq-val">{activeOrders}</div>
+            <div className="aq-lbl">Active orders</div>
           </div>
         </div>
       </div>
 
-      {/* STATS GRID */}
-      <div className="stats-grid">
-        {stats.map((stat, idx) => (
-          <div className="stat-card" key={idx} style={{ '--stat-color': stat.color }}>
-            <div className="stat-icon" style={{ background: stat.bg, color: stat.color }}>
-              {stat.icon}
+      <div className="stats-grid-warm">
+        {stats.map((s, i) => (
+          <div className="stat-card-warm" key={i}>
+            <div className="sc-icon-warm" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+            <div>
+              <div className="sc-label-warm">{s.label}</div>
+              <div className="sc-value-warm">{s.value}</div>
             </div>
-            <div className="stat-content">
-              <div className="stat-label">{stat.label}</div>
-              <div className="stat-value">{stat.value}</div>
-            </div>
-            <div className="stat-glow" style={{ background: stat.color }}></div>
           </div>
         ))}
       </div>
 
-      {/* TABS */}
-      <div className="admin-tabs">
-        {tabs.map(tab => (
+      <div className="admin-tabs-warm">
+        {tabs.map(t => (
           <button
-            key={tab.id}
-            className={`admin-tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            key={t.id}
+            className={`admin-tab-warm ${tab === t.id ? 'active' : ''}`}
+            onClick={() => setTab(t.id)}
           >
-            {tab.icon} {tab.label}
-            {tab.badge > 0 && <span className="tab-badge">{tab.badge}</span>}
+            {t.icon} {t.label}
+            {t.badge > 0 && <span className="tab-badge-warm">{t.badge}</span>}
           </button>
         ))}
       </div>
 
-      {/* CONTENT */}
-      <div className="admin-content">
-        {/* OVERVIEW */}
-        {activeTab === 'overview' && (
-          <div className="overview-section">
-            <div className="content-card">
-              <div className="cc-header">
-                <h3><FaTrophy /> Top Performing Hotels</h3>
-                <span className="cc-subtitle">By revenue</span>
-              </div>
-              <div className="hotel-rank-list">
-                {hotelPerformance.slice(0, 5).map((hotel, idx) => (
-                  <div className="rank-row" key={hotel.id}>
-                    <div className={`rank-number rank-${idx + 1}`}>
-                      {idx + 1}
-                    </div>
-                    <div 
-                      className="rank-emoji"
-                      style={{ 
-                        background: `${hotel.brand_color || '#FF6B35'}22`,
-                        borderColor: hotel.brand_color || '#FF6B35'
-                      }}
-                    >
-                      {hotel.emoji || '🍽️'}
-                    </div>
-                    <div className="rank-info">
-                      <div className="rank-name">{hotel.name}</div>
-                      <div className="rank-meta">
-                        {hotel.orderCount} order{hotel.orderCount !== 1 ? 's' : ''} · {hotel.cuisine_type}
-                      </div>
-                    </div>
-                    <div className="rank-value">
-                      {formatPrice(hotel.revenue)}
-                    </div>
-                  </div>
-                ))}
-                {hotelPerformance.length === 0 && (
-                  <div className="empty-state">No completed orders yet</div>
-                )}
-              </div>
+      {tab === 'overview' && (
+        <div className="overview-warm">
+          <div className="admin-card-warm">
+            <div className="ac-head-warm">
+              <h3><FaTrophy /> Top performing restaurants</h3>
+              <span className="ac-sub">By revenue</span>
             </div>
-
-            <div className="content-card">
-              <div className="cc-header">
-                <h3><FaMoneyBillWave /> Commission Summary</h3>
-              </div>
-              <div className="commission-breakdown">
-                <div className="cb-item">
-                  <div className="cb-label">Gross Revenue</div>
-                  <div className="cb-value">{formatPrice(totalRevenue)}</div>
-                </div>
-                <div className="cb-divider"></div>
-                <div className="cb-item">
-                  <div className="cb-label">Your Commission (10%)</div>
-                  <div className="cb-value cb-highlight">{formatPrice(totalCommission)}</div>
-                </div>
-                <div className="cb-item">
-                  <div className="cb-label">Manager Payouts</div>
-                  <div className="cb-value">{formatPrice(totalManagerPayout)}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* PENDING APPROVALS */}
-        {activeTab === 'pending' && (
-          <div className="pending-section">
-            {pendingManagers.length === 0 ? (
-              <div className="empty-state-large">
-                <div className="esl-icon">✅</div>
-                <h3>All caught up!</h3>
-                <p>No pending manager approvals right now.</p>
-              </div>
-            ) : (
-              <div className="pending-grid">
-                {pendingManagers.map(manager => (
-                  <div className="pending-card" key={manager.id}>
-                    <div className="pending-avatar">
-                      {manager.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="pending-info">
-                      <h3>{manager.name}</h3>
-                      <p className="pending-email">{manager.email}</p>
-                      <span className="pending-tag">
-                        <FaClock /> Registered {new Date(manager.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <button 
-                      className="approve-btn"
-                      onClick={() => approveManager(manager.id, manager.name)}
-                    >
-                      <FaCheckCircle /> Approve
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ALL ORDERS */}
-        {activeTab === 'orders' && (
-          <div className="orders-table-wrap">
-            <div className="content-card">
-              <div className="cc-header">
-                <h3>Recent Orders</h3>
-                <span className="cc-subtitle">{orders.length} total</span>
-              </div>
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Order #</th>
-                      <th>Customer</th>
-                      <th>Hotel</th>
-                      <th>Amount</th>
-                      <th>Commission</th>
-                      <th>Status</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.slice(0, 50).map(order => (
-                      <tr key={order.id}>
-                        <td className="td-order">#{order.order_number || order.id}</td>
-                        <td>{order.user_name}</td>
-                        <td>{order.hotel_name}</td>
-                        <td className="td-price">{formatPrice(order.total_amount)}</td>
-                        <td className="td-commission">{formatPrice(order.admin_commission)}</td>
-                        <td>
-                          <span className={`status-badge status-${order.status}`}>
-                            {order.status}
-                          </span>
-                        </td>
-                        <td className="td-date">
-                          {new Date(order.created_at).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    ))}
-                    {orders.length === 0 && (
-                      <tr>
-                        <td colSpan="7" className="td-empty">No orders yet</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* HOTELS */}
-        {activeTab === 'hotels' && (
-          <div className="hotels-grid-admin">
-            {hotels.map(hotel => (
-              <div 
-                className="hotel-admin-card" 
-                key={hotel.id}
-                style={{ '--hotel-color': hotel.brand_color || '#FF6B35' }}
-              >
-                <div 
-                  className="hac-header"
-                  style={{
-                    background: `linear-gradient(135deg, ${hotel.brand_color} 0%, ${hotel.brand_color}cc 100%)`
-                  }}
-                >
-                  <div className="hac-emoji">{hotel.emoji || '🍽️'}</div>
-                  <div className="hac-status">
-                    {hotel.is_active ? (
-                      <><FaCheckCircle /> Active</>
-                    ) : (
-                      <><FaTimesCircle /> Inactive</>
-                    )}
+            {perf.slice(0, 5).map((h, i) => (
+              <div className="rank-row-warm" key={h.id}>
+                <div className={`rank-n-warm rank-${i + 1}`}>{i + 1}</div>
+                <div className="rank-emoji-warm">{h.emoji || '🍽️'}</div>
+                <div className="rank-info-warm">
+                  <div className="rank-name-warm">{h.name}</div>
+                  <div className="rank-meta-warm">
+                    {h.orderCount} order{h.orderCount !== 1 && 's'} · {h.cuisine_type}
                   </div>
                 </div>
-                <div className="hac-body">
-                  <h3>{hotel.name}</h3>
-                  <p className="hac-cuisine">{hotel.cuisine_type}</p>
-                  <p className="hac-vibe">{hotel.vibe}</p>
-                  <div className="hac-stats">
-                    <div className="hac-stat">
-                      <div className="hac-stat-value">
-                        {orders.filter(o => o.hotel_id === hotel.id).length}
-                      </div>
-                      <div className="hac-stat-label">Orders</div>
-                    </div>
-                    <div className="hac-stat">
-                      <div className="hac-stat-value">
-                        ⭐ {hotel.rating || 'N/A'}
-                      </div>
-                      <div className="hac-stat-label">Rating</div>
-                    </div>
-                  </div>
-                </div>
+                <div className="rank-val-warm">{formatKSh(h.revenue)}</div>
               </div>
             ))}
+            {perf.length === 0 && <div className="empty-warm">No completed orders yet</div>}
           </div>
-        )}
-      </div>
+
+          <div className="admin-card-warm">
+            <div className="ac-head-warm"><h3><FaMoneyBillWave /> Commission summary</h3></div>
+            <div className="commission-warm">
+              <div className="cb-row-warm">
+                <div className="cb-lbl">Gross revenue</div>
+                <div className="cb-val">{formatKSh(totalRevenue)}</div>
+              </div>
+              <div className="cb-divider-warm" />
+              <div className="cb-row-warm">
+                <div className="cb-lbl">Your commission</div>
+                <div className="cb-val cb-highlight-warm">{formatKSh(totalCommission)}</div>
+              </div>
+              <div className="cb-row-warm">
+                <div className="cb-lbl">Manager payouts</div>
+                <div className="cb-val">{formatKSh(totalRevenue - totalCommission)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'pending' && (
+        <div className="pending-warm">
+          {pending.length === 0 ? (
+            <div className="empty-large-warm">
+              <div className="esl-ic-warm">✅</div>
+              <h3>All caught up</h3>
+              <p>No pending manager approvals right now.</p>
+            </div>
+          ) : (
+            <div className="pending-grid-warm">
+              {pending.map(m => (
+                <div className="pending-card-warm" key={m.id}>
+                  <div className="pending-av-warm">{m.name.charAt(0)}</div>
+                  <div className="pending-info-warm">
+                    <h3>{m.name}</h3>
+                    <p>{m.email}</p>
+                    <span className="pending-tag-warm">
+                      <FaClock /> {new Date(m.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <button className="approve-btn-warm" onClick={() => approve(m.id, m.name)}>
+                    <FaCheckCircle /> Approve
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'orders' && (
+        <div className="admin-card-warm">
+          <div className="ac-head-warm">
+            <h3>Recent orders</h3>
+            <span className="ac-sub">{orders.length} total</span>
+          </div>
+          <div className="table-wrap-warm">
+            <table className="admin-table-warm">
+              <thead>
+                <tr>
+                  <th>Order</th><th>Customer</th><th>Hotel</th>
+                  <th>Amount</th><th>Commission</th><th>Status</th><th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.slice(0, 50).map(o => (
+                  <tr key={o.id}>
+                    <td className="td-order-warm">#{o.order_number || o.id}</td>
+                    <td>{o.user_name}</td>
+                    <td>{o.hotel_name}</td>
+                    <td className="td-price-warm">{formatKSh(o.total_amount)}</td>
+                    <td className="td-comm-warm">{formatKSh(o.admin_commission)}</td>
+                    <td><span className={`status-warm status-${o.status}`}>{o.status}</span></td>
+                    <td className="td-date-warm">{new Date(o.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+                {orders.length === 0 && <tr><td colSpan="7" className="td-empty-warm">No orders yet</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'hotels' && (
+        <div className="hotel-grid-admin-warm">
+          {hotels.map(h => (
+            <div className="hotel-admin-warm" key={h.id}>
+              <div className="hac-head-warm" style={{ background: `linear-gradient(135deg, ${h.brand_color}30 0%, ${h.brand_color}10 100%)` }}>
+                <span className="hac-emoji-warm">{h.emoji || '🍽️'}</span>
+                <span className="hac-status-warm">
+                  {h.is_active ? <><FaCheckCircle /> Active</> : 'Inactive'}
+                </span>
+              </div>
+              <div className="hac-body-warm">
+                <h3>{h.name}</h3>
+                <p className="hac-cuisine-warm" style={{ color: h.brand_color }}>{h.cuisine_type}</p>
+                <p className="hac-vibe-warm">{h.vibe}</p>
+                <div className="hac-stats-warm">
+                  <div>
+                    <div className="hac-val">{orders.filter(o => o.hotel_id === h.id).length}</div>
+                    <div className="hac-lbl">Orders</div>
+                  </div>
+                  <div>
+                    <div className="hac-val">⭐ {h.rating || 'N/A'}</div>
+                    <div className="hac-lbl">Rating</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

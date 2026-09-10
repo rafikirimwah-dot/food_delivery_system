@@ -1,9 +1,8 @@
-// frontend/src/components/Checkout.js
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  FaArrowLeft, FaMapMarkerAlt, FaMobileAlt, FaMoneyBillWave, 
-  FaCreditCard, FaCheckCircle, FaMotorcycle, FaShieldAlt 
+import {
+  FaArrowLeft, FaMapMarkerAlt, FaMobileAlt, FaMoneyBillWave,
+  FaCheckCircle, FaMotorcycle, FaShieldAlt
 } from 'react-icons/fa';
 import axios from 'axios';
 import { CartContext } from '../context/CartContext';
@@ -16,329 +15,270 @@ function Checkout() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState({
     address: user?.address || '',
     phone: user?.phone || '',
     payment_method: 'mpesa',
     mpesa_number: user?.phone || '',
     instructions: ''
   });
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [orderComplete, setOrderComplete] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [done, setDone] = useState(false);
   const [orderId, setOrderId] = useState(null);
 
-  const formatPrice = (price) => {
-    const num = typeof price === 'string' ? parseFloat(price) : price;
-    if (isNaN(num)) return 'KSh 0';
-    return `KSh ${Math.round(num).toLocaleString()}`;
-  };
+  const formatKSh = (n) => `KSh ${Math.round(parseFloat(n)).toLocaleString()}`;
 
   const total = getTotal();
-  const deliveryFee = 0;
-  const finalTotal = total + deliveryFee;
 
-  // If cart is empty and not completed, redirect
-  if (cartItems.length === 0 && !orderComplete) {
+  if (cartItems.length === 0 && !done) {
     return (
-      <div className="checkout-page-v2">
-        <div className="checkout-empty">
+      <div className="checkout-page-warm">
+        <div className="checkout-empty-warm">
           <h2>Your cart is empty</h2>
-          <Link to="/hotels" className="btn-hero-primary">Browse Restaurants</Link>
+          <Link to="/hotels" className="btn-primary-warm">Browse Restaurants</Link>
         </div>
       </div>
     );
   }
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
+    if (!form.address.trim()) return showToast('Please enter delivery address', 'warning');
+    if (!form.phone.trim() || form.phone.length < 10) return showToast('Please enter valid phone', 'warning');
 
-    if (!formData.address.trim()) {
-      showToast('Please enter a delivery address', 'warning');
-      return;
-    }
-    if (!formData.phone.trim() || formData.phone.length < 10) {
-      showToast('Please enter a valid phone number', 'warning');
-      return;
-    }
-
-    setIsProcessing(true);
-
+    setProcessing(true);
     try {
       const token = localStorage.getItem('token');
       const hotelId = cartItems[0]?.hotel_id;
 
-      // Simulate payment processing
       await new Promise(r => setTimeout(r, 1800));
 
-      const response = await axios.post(
+      const res = await axios.post(
         'http://localhost:5000/api/orders',
         {
           hotel_id: hotelId,
-          items: cartItems.map(item => ({
-            food_item_id: item.id,
-            quantity: item.quantity,
-            price: item.price
-          })),
-          delivery_address: formData.address,
-          payment_method: formData.payment_method
+          items: cartItems.map(i => ({ food_item_id: i.id, quantity: i.quantity, price: i.price })),
+          delivery_address: form.address,
+          payment_method: form.payment_method
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setOrderId(response.data.order_id);
-      setOrderComplete(true);
+      setOrderId(res.data.order_id);
+      setDone(true);
       clearCart();
       showToast('Payment successful! Order placed 🎉', 'success');
-
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
       showToast('Order failed. Please try again.', 'error');
     } finally {
-      setIsProcessing(false);
+      setProcessing(false);
     }
   };
 
-  // ============ SUCCESS SCREEN ============
-  if (orderComplete) {
+  if (done) {
     return (
-      <div className="checkout-success">
-        <div className="success-orb">
-          <FaCheckCircle />
-        </div>
-        <h1>Order Confirmed! 🎉</h1>
-        <p>
-          Your food is being prepared. We'll notify you when the rider is on the way.
-        </p>
-        <div className="success-details">
-          <div className="sd-row">
-            <span>Order Number</span>
-            <strong>#{orderId}</strong>
-          </div>
-          <div className="sd-row">
-            <span>Amount Paid</span>
-            <strong>{formatPrice(finalTotal)}</strong>
-          </div>
-          <div className="sd-row">
-            <span>Payment Method</span>
-            <strong>{formData.payment_method === 'mpesa' ? 'M-Pesa' : 'Cash on Delivery'}</strong>
+      <div className="checkout-success-warm">
+        <div className="success-orb-warm"><FaCheckCircle /></div>
+        <h1>Order confirmed 🎉</h1>
+        <p>Your food is being prepared. We'll notify you when the rider is on the way.</p>
+        <div className="success-details-warm">
+          <div className="sd-row-warm"><span>Order number</span><strong>#{orderId}</strong></div>
+          <div className="sd-row-warm"><span>Amount paid</span><strong>{formatKSh(total)}</strong></div>
+          <div className="sd-row-warm">
+            <span>Payment</span>
+            <strong>{form.payment_method === 'mpesa' ? 'M-Pesa' : 'Cash on Delivery'}</strong>
           </div>
         </div>
-        <div className="success-actions">
-          <Link to={`/order-tracking/${orderId}`} className="btn-hero-primary">
+        <div className="success-actions-warm">
+          <Link to={`/order-tracking/${orderId}`} className="btn-primary-warm">
             <FaMotorcycle /> Track Order
           </Link>
-          <Link to="/hotels" className="btn-hero-ghost">
-            Order More
-          </Link>
+          <Link to="/hotels" className="btn-ghost-warm">Order More</Link>
         </div>
       </div>
     );
   }
 
-  // ============ CHECKOUT FORM ============
   return (
-    <div className="checkout-page-v2">
-      <Link to="/cart" className="back-link-v2">
+    <div className="checkout-page-warm">
+      <Link to="/cart" className="back-btn-warm">
         <FaArrowLeft /> Back to Cart
       </Link>
 
-      <div className="checkout-header">
+      <div className="checkout-head-warm">
         <h1>Checkout</h1>
-        <p>Almost there! Confirm your details below.</p>
+        <p>Almost there. Just confirm your details below.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="checkout-layout">
-        {/* LEFT — FORM */}
-        <div className="checkout-form">
-          {/* Delivery */}
-          <div className="co-card">
-            <div className="co-card-header">
-              <div className="co-card-icon" style={{ background: 'rgba(0, 212, 255, 0.15)', color: '#00D4FF' }}>
-                <FaMapMarkerAlt />
-              </div>
+      <form onSubmit={submit} className="checkout-layout-warm">
+        <div className="checkout-form-warm">
+          <div className="co-card-warm">
+            <div className="co-card-head">
+              <div className="co-icon co-icon-blue"><FaMapMarkerAlt /></div>
               <div>
                 <h3>Delivery Details</h3>
-                <p>Where should we drop your food?</p>
+                <p>Where should we bring your order?</p>
               </div>
             </div>
 
-            <div className="co-field">
+            <div className="co-field-warm">
               <label>Delivery Address</label>
               <textarea
                 name="address"
-                value={formData.address}
-                onChange={handleChange}
-                placeholder="e.g. Westlands, Nairobi - Apartment 4B, near Sarit Centre"
+                value={form.address}
+                onChange={update}
+                placeholder="e.g. Westlands, Rhapta Road, Villa 12"
                 rows="3"
                 required
               />
             </div>
 
-            <div className="co-field">
+            <div className="co-field-warm">
               <label>Phone Number</label>
               <input
                 type="tel"
                 name="phone"
-                value={formData.phone}
-                onChange={handleChange}
+                value={form.phone}
+                onChange={update}
                 placeholder="e.g. 0712 345 678"
                 required
               />
             </div>
 
-            <div className="co-field">
+            <div className="co-field-warm">
               <label>Delivery Instructions <span>(optional)</span></label>
               <input
                 type="text"
                 name="instructions"
-                value={formData.instructions}
-                onChange={handleChange}
-                placeholder="e.g. Call when you arrive, gate code 1234"
+                value={form.instructions}
+                onChange={update}
+                placeholder="e.g. Call on arrival, gate code 1234"
               />
             </div>
           </div>
 
-          {/* Payment */}
-          <div className="co-card">
-            <div className="co-card-header">
-              <div className="co-card-icon" style={{ background: 'rgba(198, 255, 0, 0.15)', color: '#C6FF00' }}>
-                <FaMoneyBillWave />
-              </div>
+          <div className="co-card-warm">
+            <div className="co-card-head">
+              <div className="co-icon co-icon-gold"><FaMoneyBillWave /></div>
               <div>
                 <h3>Payment Method</h3>
-                <p>Choose how you want to pay</p>
+                <p>How would you like to pay?</p>
               </div>
             </div>
 
-            <div className="payment-options">
-              <label className={`payment-option ${formData.payment_method === 'mpesa' ? 'active' : ''}`}>
+            <div className="pay-options-warm">
+              <label className={`pay-opt-warm ${form.payment_method === 'mpesa' ? 'active' : ''}`}>
                 <input
                   type="radio"
                   name="payment_method"
                   value="mpesa"
-                  checked={formData.payment_method === 'mpesa'}
-                  onChange={handleChange}
+                  checked={form.payment_method === 'mpesa'}
+                  onChange={update}
                 />
-                <div className="po-icon" style={{ background: 'linear-gradient(135deg, #00E676, #00B248)' }}>
+                <span className="po-ic-warm" style={{ background: 'var(--sage-tint)', color: 'var(--sage-dark)' }}>
                   <FaMobileAlt />
+                </span>
+                <div className="po-info-warm">
+                  <div className="po-title-warm">M-Pesa</div>
+                  <div className="po-desc-warm">Pay via mobile money</div>
                 </div>
-                <div className="po-info">
-                  <div className="po-title">M-Pesa</div>
-                  <div className="po-desc">Pay via mobile money</div>
-                </div>
-                <div className="po-check">
-                  {formData.payment_method === 'mpesa' && <FaCheckCircle />}
-                </div>
+                {form.payment_method === 'mpesa' && <FaCheckCircle className="po-check-warm" />}
               </label>
 
-              <label className={`payment-option ${formData.payment_method === 'cash' ? 'active' : ''}`}>
+              <label className={`pay-opt-warm ${form.payment_method === 'cash' ? 'active' : ''}`}>
                 <input
                   type="radio"
                   name="payment_method"
                   value="cash"
-                  checked={formData.payment_method === 'cash'}
-                  onChange={handleChange}
+                  checked={form.payment_method === 'cash'}
+                  onChange={update}
                 />
-                <div className="po-icon" style={{ background: 'linear-gradient(135deg, #FFB800, #FF3D68)' }}>
+                <span className="po-ic-warm" style={{ background: 'var(--gold-tint)', color: 'var(--gold)' }}>
                   <FaMoneyBillWave />
+                </span>
+                <div className="po-info-warm">
+                  <div className="po-title-warm">Cash on Delivery</div>
+                  <div className="po-desc-warm">Pay the rider when food arrives</div>
                 </div>
-                <div className="po-info">
-                  <div className="po-title">Cash on Delivery</div>
-                  <div className="po-desc">Pay the rider when food arrives</div>
-                </div>
-                <div className="po-check">
-                  {formData.payment_method === 'cash' && <FaCheckCircle />}
-                </div>
+                {form.payment_method === 'cash' && <FaCheckCircle className="po-check-warm" />}
               </label>
             </div>
 
-            {formData.payment_method === 'mpesa' && (
-              <div className="co-field mpesa-field">
+            {form.payment_method === 'mpesa' && (
+              <div className="co-field-warm mpesa-field-warm">
                 <label>M-Pesa Number</label>
                 <input
                   type="tel"
                   name="mpesa_number"
-                  value={formData.mpesa_number}
-                  onChange={handleChange}
+                  value={form.mpesa_number}
+                  onChange={update}
                   placeholder="0712 345 678"
                 />
-                <small>You'll receive an STK push to confirm payment</small>
+                <small>You'll receive an STK push to confirm payment.</small>
               </div>
             )}
           </div>
         </div>
 
-        {/* RIGHT — SUMMARY */}
-        <div className="checkout-summary">
-          <div className="co-summary-card">
+        <aside className="checkout-summary-warm">
+          <div className="co-summary-card-warm">
             <h3>Order Summary</h3>
 
-            <div className="co-items">
+            <div className="co-items-warm">
               {cartItems.map(item => (
-                <div className="co-item" key={item.id}>
-                  <div className="co-item-img">
-                    <img 
-                      src={item.image_url} 
+                <div className="co-item-warm" key={item.id}>
+                  <div className="co-item-img-warm">
+                    <img
+                      src={item.image_url}
                       alt={item.name}
-                      onError={(e) => e.target.src = 'https://via.placeholder.com/60'}
+                      onError={(e) => e.target.src = 'https://via.placeholder.com/60x60/F5EFE6/C97B5F?text=+'}
                     />
                     <span className="co-item-qty">{item.quantity}</span>
                   </div>
-                  <div className="co-item-info">
+                  <div className="co-item-info-warm">
                     <div className="co-item-name">{item.name}</div>
                     <div className="co-item-hotel">{item.hotel_name}</div>
                   </div>
-                  <div className="co-item-price">
-                    {formatPrice(item.price * item.quantity)}
-                  </div>
+                  <div className="co-item-price-warm">{formatKSh(item.price * item.quantity)}</div>
                 </div>
               ))}
             </div>
 
-            <div className="co-summary-divider"></div>
+            <div className="co-divider-warm" />
 
-            <div className="co-summary-row">
+            <div className="co-row-warm">
               <span>Subtotal</span>
-              <span>{formatPrice(total)}</span>
+              <span>{formatKSh(total)}</span>
             </div>
-            <div className="co-summary-row">
+            <div className="co-row-warm">
               <span>Delivery</span>
-              <span style={{ color: 'var(--neon-green)', fontWeight: 700 }}>FREE</span>
+              <span className="co-free-warm">FREE</span>
             </div>
 
-            <div className="co-summary-divider"></div>
+            <div className="co-divider-warm" />
 
-            <div className="co-summary-total">
+            <div className="co-total-warm">
               <span>Total</span>
-              <span className="co-total-value">{formatPrice(finalTotal)}</span>
+              <span className="co-total-val-warm">{formatKSh(total)}</span>
             </div>
 
-            <button 
-              type="submit" 
-              className="place-order-btn"
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <>
-                  <span className="btn-spinner"></span> Processing...
-                </>
+            <button type="submit" className="place-btn-warm" disabled={processing}>
+              {processing ? (
+                <><span className="btn-spin"></span> Processing…</>
               ) : (
-                <>
-                  <FaShieldAlt /> Pay {formatPrice(finalTotal)}
-                </>
+                <><FaShieldAlt /> Pay {formatKSh(total)}</>
               )}
             </button>
 
-            <div className="co-trust">
-              <div><FaShieldAlt /> Secure payment</div>
-              <div><FaMotorcycle /> 20-30 min delivery</div>
+            <div className="co-trust-warm">
+              <span><FaShieldAlt /> Secure payment</span>
+              <span><FaMotorcycle /> 20–30 min</span>
             </div>
           </div>
-        </div>
+        </aside>
       </form>
     </div>
   );

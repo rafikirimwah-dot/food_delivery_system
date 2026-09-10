@@ -1,9 +1,8 @@
-// frontend/src/components/MyOrders.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  FaClock, FaCheckCircle, FaMotorcycle, FaBox, 
-  FaUtensils, FaTimesCircle, FaArrowRight, FaReceipt 
+import {
+  FaClock, FaCheckCircle, FaMotorcycle, FaBox,
+  FaUtensils, FaTimesCircle, FaArrowRight, FaReceipt
 } from 'react-icons/fa';
 import axios from 'axios';
 import { useToast } from './ToastContext';
@@ -15,234 +14,178 @@ function MyOrders() {
   const [filter, setFilter] = useState('all');
   const { showToast } = useToast();
 
+  const formatKSh = (n) => `KSh ${Math.round(parseFloat(n)).toLocaleString()}`;
+
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-KE', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    const fetch = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('http://localhost:5000/api/users/orders', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setOrders(res.data);
+      } catch (err) {
+        showToast('Failed to load orders', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetch();
+  }, [showToast]);
 
-  const fetchOrders = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:5000/api/users/orders', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setOrders(res.data);
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to load orders', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleConfirmDelivery = async (orderId) => {
+  const confirmDelivery = async (id) => {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://localhost:5000/api/orders/${orderId}/confirm-delivery`,
+        `http://localhost:5000/api/orders/${id}/confirm-delivery`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
       showToast('Delivery confirmed! Enjoy your meal 🍽️', 'success');
-      fetchOrders();
-    } catch (err) {
-      showToast('Failed to confirm delivery', 'error');
+      // reload
+      const res = await axios.get('http://localhost:5000/api/users/orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setOrders(res.data);
+    } catch {
+      showToast('Failed to confirm', 'error');
     }
   };
 
-  const formatPrice = (price) => {
-    const num = typeof price === 'string' ? parseFloat(price) : price;
-    if (isNaN(num)) return 'KSh 0';
-    return `KSh ${Math.round(num).toLocaleString()}`;
+  const statusMap = {
+    pending:   { label: 'Pending',      color: 'var(--gold)',       bg: 'var(--gold-tint)',   icon: <FaClock /> },
+    confirmed: { label: 'Confirmed',    color: 'var(--terracotta)', bg: 'var(--terracotta-tint)', icon: <FaCheckCircle /> },
+    preparing: { label: 'Preparing',    color: 'var(--terracotta-dark)', bg: 'var(--terracotta-tint)', icon: <FaUtensils /> },
+    ready:     { label: 'Ready',        color: 'var(--sage-dark)',  bg: 'var(--sage-tint)',   icon: <FaBox /> },
+    delivered: { label: 'On the way',   color: 'var(--rose-dark)',  bg: 'var(--rose-tint)',   icon: <FaMotorcycle /> },
+    completed: { label: 'Delivered',    color: 'var(--sage-dark)',  bg: 'var(--sage-tint)',   icon: <FaCheckCircle /> },
+    cancelled: { label: 'Cancelled',    color: 'var(--rose-dark)',  bg: 'var(--rose-tint)',   icon: <FaTimesCircle /> }
   };
 
-  const formatDate = (dateStr) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-KE', {
-      day: 'numeric', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    });
-  };
-
-  const statusConfig = {
-    pending:    { label: 'Pending',       color: '#FFB800', icon: <FaClock />,          bg: 'rgba(255,184,0,0.15)' },
-    confirmed:  { label: 'Confirmed',     color: '#00D4FF', icon: <FaCheckCircle />,    bg: 'rgba(0,212,255,0.15)' },
-    preparing:  { label: 'Preparing',     color: '#9D4EDD', icon: <FaUtensils />,       bg: 'rgba(157,78,221,0.15)' },
-    ready:      { label: 'Ready',         color: '#00E676', icon: <FaBox />,            bg: 'rgba(0,230,118,0.15)' },
-    delivered:  { label: 'On the Way',    color: '#C6FF00', icon: <FaMotorcycle />,     bg: 'rgba(198,255,0,0.15)' },
-    completed:  { label: 'Delivered',     color: '#00E676', icon: <FaCheckCircle />,    bg: 'rgba(0,230,118,0.15)' },
-    cancelled:  { label: 'Cancelled',     color: '#FF3D68', icon: <FaTimesCircle />,    bg: 'rgba(255,61,104,0.15)' }
-  };
-
-  const filterTabs = [
+  const filters = [
     { id: 'all', label: 'All' },
     { id: 'active', label: 'Active' },
     { id: 'completed', label: 'Completed' },
     { id: 'cancelled', label: 'Cancelled' }
   ];
 
-  const filteredOrders = orders.filter(order => {
+  const filtered = orders.filter(o => {
     if (filter === 'all') return true;
-    if (filter === 'active') return ['pending', 'confirmed', 'preparing', 'ready', 'delivered'].includes(order.status);
-    if (filter === 'completed') return order.status === 'completed';
-    if (filter === 'cancelled') return order.status === 'cancelled';
-    return true;
+    if (filter === 'active') return ['pending','confirmed','preparing','ready','delivered'].includes(o.status);
+    return o.status === filter;
   });
 
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading your orders...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="loading-container"><div className="spinner" /><p>Loading your orders…</p></div>;
 
-  // ============ EMPTY ============
   if (orders.length === 0) {
     return (
-      <div className="orders-empty-v2">
-        <div className="empty-orb">
-          <FaReceipt />
-        </div>
+      <div className="orders-empty-warm">
+        <div className="empty-orb-warm"><FaReceipt /></div>
         <h1>No orders yet</h1>
-        <p>Your order history will appear here. Time to try something delicious!</p>
-        <Link to="/hotels" className="btn-hero-primary">
-          <FaArrowRight /> Order Now
+        <p>Your order history will appear here. Let's change that.</p>
+        <Link to="/hotels" className="btn-primary-warm">
+          Order Now <FaArrowRight />
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="orders-page-v2">
-      <div className="orders-header">
-        <div>
-          <h1>My Orders</h1>
-          <p>{orders.length} order{orders.length !== 1 ? 's' : ''} in total</p>
-        </div>
+    <div className="orders-page-warm">
+      <div className="orders-head-warm">
+        <h1>My Orders</h1>
+        <p>{orders.length} order{orders.length !== 1 && 's'}</p>
       </div>
 
-      {/* Filter tabs */}
-      <div className="orders-filters">
-        {filterTabs.map(tab => {
-          const count = tab.id === 'all' ? orders.length : orders.filter(o => {
-            if (tab.id === 'active') return ['pending','confirmed','preparing','ready','delivered'].includes(o.status);
-            return o.status === tab.id;
-          }).length;
-
+      <div className="orders-filters-warm">
+        {filters.map(f => {
+          const count = f.id === 'all' ? orders.length :
+            f.id === 'active' ? orders.filter(o => ['pending','confirmed','preparing','ready','delivered'].includes(o.status)).length :
+            orders.filter(o => o.status === f.id).length;
           return (
             <button
-              key={tab.id}
-              className={`filter-tab ${filter === tab.id ? 'active' : ''}`}
-              onClick={() => setFilter(tab.id)}
+              key={f.id}
+              className={`filter-btn-warm ${filter === f.id ? 'active' : ''}`}
+              onClick={() => setFilter(f.id)}
             >
-              {tab.label}
-              <span className="filter-count">{count}</span>
+              {f.label}
+              <span className="filter-count-warm">{count}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Orders */}
-      <div className="orders-list-v2">
-        {filteredOrders.length === 0 ? (
-          <div className="no-filter-results">
-            <p>No {filter} orders found</p>
-          </div>
-        ) : (
-          filteredOrders.map(order => {
-            const status = statusConfig[order.status] || statusConfig.pending;
-            const hotelColor = order.hotel_color || '#FF6B35';
-            const isDelivered = order.status === 'completed';
-
-            return (
-              <div 
-                className="order-card-v2" 
-                key={order.id}
-                style={{ '--order-color': hotelColor }}
-              >
-                <div className="oc-header">
-                  <div className="oc-hotel">
-                    <div 
-                      className="oc-hotel-emoji"
-                      style={{ 
-                        background: `${hotelColor}22`,
-                        borderColor: hotelColor,
-                        boxShadow: `0 0 20px ${hotelColor}40`
-                      }}
-                    >
-                      {order.hotel_emoji || '🍽️'}
-                    </div>
-                    <div>
-                      <div className="oc-order-number">
-                        Order #{order.order_number || order.id}
-                      </div>
-                      <div className="oc-hotel-name">{order.hotel_name}</div>
-                    </div>
+      <div className="orders-list-warm">
+        {filtered.length === 0 ? (
+          <div className="no-results-warm">No {filter} orders</div>
+        ) : filtered.map(o => {
+          const st = statusMap[o.status] || statusMap.pending;
+          return (
+            <div className="order-card-warm" key={o.id}>
+              <div className="oc-head-warm">
+                <div className="oc-hotel-warm">
+                  <div className="oc-hotel-icon">
+                    {o.hotel_emoji || '🍽️'}
                   </div>
-
-                  <div 
-                    className="oc-status-pill"
-                    style={{ background: status.bg, color: status.color }}
-                  >
-                    {status.icon} {status.label}
+                  <div>
+                    <div className="oc-num">#{o.order_number || o.id}</div>
+                    <div className="oc-name">{o.hotel_name}</div>
                   </div>
                 </div>
+                <span className="oc-status-warm" style={{ background: st.bg, color: st.color }}>
+                  {st.icon} {st.label}
+                </span>
+              </div>
 
-                <div className="oc-meta">
-                  <div className="oc-meta-item">
-                    <span className="oc-meta-label">Placed</span>
-                    <span className="oc-meta-value">{formatDate(order.created_at)}</span>
-                  </div>
-                  <div className="oc-meta-item">
-                    <span className="oc-meta-label">Delivery</span>
-                    <span className="oc-meta-value oc-delivery">
-                      {order.delivery_address?.substring(0, 40)}{order.delivery_address?.length > 40 ? '...' : ''}
-                    </span>
-                  </div>
+              <div className="oc-meta-warm">
+                <div>
+                  <div className="oc-meta-label">Placed</div>
+                  <div className="oc-meta-val">{formatDate(o.created_at)}</div>
                 </div>
-
-                <div className="oc-footer">
-                  <div className="oc-total">
-                    <span className="oc-total-label">Total</span>
-                    <span className="oc-total-value">{formatPrice(order.total_amount)}</span>
-                  </div>
-
-                  <div className="oc-actions">
-                    {!isDelivered && order.status !== 'cancelled' && (
-                      <>
-                        <Link 
-                          to={`/order-tracking/${order.id}`} 
-                          className="oc-btn ghost"
-                        >
-                          Track <FaMotorcycle />
-                        </Link>
-                        {order.status === 'delivered' && (
-                          <button 
-                            className="oc-btn primary"
-                            onClick={() => handleConfirmDelivery(order.id)}
-                          >
-                            Confirm Delivery <FaCheckCircle />
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {isDelivered && (
-                      <Link to={`/hotel/${order.hotel_id}`} className="oc-btn primary">
-                        Order Again <FaArrowRight />
-                      </Link>
-                    )}
-                    {order.status === 'cancelled' && (
-                      <Link to={`/hotel/${order.hotel_id}`} className="oc-btn ghost">
-                        Try Again
-                      </Link>
-                    )}
+                <div>
+                  <div className="oc-meta-label">Delivery to</div>
+                  <div className="oc-meta-val">
+                    {o.delivery_address?.substring(0, 45)}
+                    {o.delivery_address?.length > 45 && '…'}
                   </div>
                 </div>
               </div>
-            );
-          })
-        )}
+
+              <div className="oc-foot-warm">
+                <div className="oc-total-warm">
+                  <span className="oc-total-label">Total</span>
+                  <span className="oc-total-val">{formatKSh(o.total_amount)}</span>
+                </div>
+                <div className="oc-actions-warm">
+                  {!['completed','cancelled'].includes(o.status) && (
+                    <Link to={`/order-tracking/${o.id}`} className="oc-btn-warm ghost">
+                      Track <FaMotorcycle />
+                    </Link>
+                  )}
+                  {o.status === 'delivered' && (
+                    <button className="oc-btn-warm primary" onClick={() => confirmDelivery(o.id)}>
+                      Confirm <FaCheckCircle />
+                    </button>
+                  )}
+                  {o.status === 'completed' && (
+                    <Link to={`/hotel/${o.hotel_id}`} className="oc-btn-warm primary">
+                      Order Again <FaArrowRight />
+                    </Link>
+                  )}
+                  {o.status === 'cancelled' && (
+                    <Link to={`/hotel/${o.hotel_id}`} className="oc-btn-warm ghost">
+                      Try Again
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

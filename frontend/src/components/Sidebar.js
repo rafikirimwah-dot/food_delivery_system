@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  FaHome, 
-  FaHotel, 
-  FaShoppingCart, 
-  FaUser, 
-  FaSignOutAlt,
-  FaTimes,
-  FaUtensils,
-  FaChartBar
+import {
+  FaHome, FaStore, FaShoppingCart, FaUtensils, FaChartLine,
+  FaSignOutAlt, FaTimes, FaUser
 } from 'react-icons/fa';
 import './Sidebar.css';
 
@@ -19,15 +13,12 @@ function Sidebar() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handleSidebarToggle = () => {
-      setIsOpen(prev => !prev);
-    };
-
-    window.addEventListener('toggleSidebar', handleSidebarToggle);
-    return () => window.removeEventListener('toggleSidebar', handleSidebarToggle);
+    const toggle = () => setIsOpen(prev => !prev);
+    window.addEventListener('toggleSidebar', toggle);
+    return () => window.removeEventListener('toggleSidebar', toggle);
   }, []);
 
-  const closeSidebar = () => {
+  const close = () => {
     setIsOpen(false);
     document.body.style.overflow = 'auto';
   };
@@ -36,79 +27,72 @@ function Sidebar() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/login');
-    closeSidebar();
+    close();
     window.location.reload();
   };
 
   const menuItems = [
     { icon: <FaHome />, label: 'Home', path: '/', show: true },
-    { icon: <FaHotel />, label: 'Hotels', path: '/hotels', show: true },
+    { icon: <FaStore />, label: 'Restaurants', path: '/hotels', show: true },
     { icon: <FaShoppingCart />, label: 'Cart', path: '/cart', show: token && user?.role === 'user' },
     { icon: <FaUtensils />, label: 'My Orders', path: '/my-orders', show: token && user?.role === 'user' },
-    { icon: <FaChartBar />, label: 'Admin Dashboard', path: '/admin', show: token && user?.role === 'admin' },
-    { icon: <FaChartBar />, label: 'Manager Dashboard', path: '/manager', show: token && user?.role === 'manager' },
+    { icon: <FaChartLine />, label: 'Admin Dashboard', path: '/admin', show: token && user?.role === 'admin' },
+    { icon: <FaChartLine />, label: 'Manager Dashboard', path: '/manager', show: token && user?.role === 'manager' },
   ];
 
   return (
     <>
-      <div className={`sidebar-overlay ${isOpen ? 'active' : ''}`} onClick={closeSidebar} />
-      
-      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
-        <div className="sidebar-header">
-          <div className="sidebar-logo">
-            <span className="logo-icon">🍔</span>
-            <span className="logo-text">Food<span>Delivery</span></span>
+      <div className={`sidebar-overlay-warm ${isOpen ? 'active' : ''}`} onClick={close} />
+
+      <aside className={`sidebar-warm ${isOpen ? 'open' : ''}`}>
+        <div className="sb-header">
+          <div className="sb-brand">
+            <span className="sb-mark">🍽️</span>
+            <span className="sb-name">FoodExpress</span>
           </div>
-          <button className="close-btn" onClick={closeSidebar}>
+          <button className="sb-close" onClick={close} aria-label="Close">
             <FaTimes />
           </button>
         </div>
 
         {token && user && (
-          <div className="sidebar-user">
-            <div className="user-avatar">
-              <FaUser />
-            </div>
-            <div className="user-info">
-              <h4>{user.name}</h4>
-              <span className="user-role">{user.role}</span>
+          <div className="sb-user">
+            <div className="sb-avatar">{user.name?.charAt(0)}</div>
+            <div>
+              <div className="sb-user-name">{user.name}</div>
+              <div className="sb-user-role">{user.role}</div>
             </div>
           </div>
         )}
 
-        <nav className="sidebar-nav">
-          {menuItems.map((item, index) => {
+        <nav className="sb-nav">
+          {menuItems.map((item, i) => {
             if (!item.show) return null;
             return (
-              <Link 
-                key={index} 
-                to={item.path} 
-                className="sidebar-link"
-                onClick={closeSidebar}
-              >
-                <span className="link-icon">{item.icon}</span>
-                <span className="link-label">{item.label}</span>
+              <Link key={i} to={item.path} className="sb-link" onClick={close}>
+                <span className="sb-icon">{item.icon}</span>
+                <span>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="sidebar-footer">
+        <div className="sb-footer">
           {!token ? (
             <>
-              <Link to="/login" className="sidebar-link" onClick={closeSidebar}>
-                <span className="link-icon"><FaUser /></span>
-                <span className="link-label">Login</span>
+              <Link to="/login" className="sb-link" onClick={close}>
+                <span className="sb-icon"><FaUser /></span>
+                <span>Login</span>
               </Link>
-              <Link to="/register" className="sidebar-link" onClick={closeSidebar}>
-                <span className="link-icon"><FaUser /></span>
-                <span className="link-label">Register</span>
+              <Link to="/register" className="sb-link primary" onClick={close}>
+                <span className="sb-icon"><FaUser /></span>
+                <span>Create Account</span>
               </Link>
             </>
           ) : (
-            <button className="sidebar-link logout-link" onClick={handleLogout}>
-              <span className="link-icon"><FaSignOutAlt /></span>
-              <span className="link-label">Logout</span>
+            <button className="sb-link danger" onClick={handleLogout}>
+              <span className="sb-icon"><FaSignOutAlt /></span>
+              <span>Logout</span>
             </button>
           )}
         </div>

@@ -1,9 +1,7 @@
-// frontend/src/components/ManagerDashboard.js
 import React, { useState, useEffect } from 'react';
-import { 
-  FaUtensils, FaShoppingBag, FaMoneyBillWave, FaPlus, 
-  FaEdit, FaTrash, FaTimes, FaCheck, FaChartLine, 
-  FaFire, FaStar, FaClock 
+import {
+  FaUtensils, FaShoppingBag, FaMoneyBillWave, FaPlus, FaEdit,
+  FaTrash, FaTimes, FaCheck, FaChartLine, FaFire, FaClock, FaStar
 } from 'react-icons/fa';
 import axios from 'axios';
 import { useToast } from './ToastContext';
@@ -14,106 +12,76 @@ function ManagerDashboard() {
   const [menu, setMenu] = useState([]);
   const [orders, setOrders] = useState([]);
   const [earnings, setEarnings] = useState({ total_earnings: 0, total_orders: 0 });
-  const [activeTab, setActiveTab] = useState('overview');
+  const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '', description: '', price: '', category: 'Main', is_available: true
-  });
+  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name: '', description: '', price: '', category: 'Main', is_available: true });
   const { showToast } = useToast();
-
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-  useEffect(() => {
-    fetchAll();
-  }, []);
+  const formatKSh = (n) => `KSh ${Math.round(parseFloat(n || 0)).toLocaleString()}`;
+
+  useEffect(() => { fetchAll(); }, []);
 
   const fetchAll = async () => {
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
-
-      const [hotelRes, menuRes, ordersRes, earningsRes] = await Promise.all([
+      const [h, m, o, e] = await Promise.all([
         axios.get('http://localhost:5000/api/manager/hotel', { headers }),
         axios.get('http://localhost:5000/api/manager/menu', { headers }),
         axios.get('http://localhost:5000/api/manager/orders', { headers }),
         axios.get('http://localhost:5000/api/manager/earnings', { headers })
       ]);
-
-      setHotel(hotelRes.data);
-      setMenu(menuRes.data);
-      setOrders(ordersRes.data);
-      setEarnings(earningsRes.data);
+      setHotel(h.data);
+      setMenu(m.data);
+      setOrders(o.data);
+      setEarnings(e.data);
     } catch (err) {
-      console.error(err);
       showToast('Failed to load dashboard', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const formatPrice = (price) => {
-    const num = typeof price === 'string' ? parseFloat(price) : price;
-    if (isNaN(num)) return 'KSh 0';
-    return `KSh ${Math.round(num).toLocaleString()}`;
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ name: '', description: '', price: '', category: 'Main', is_available: true });
+    setModal(true);
   };
 
-  // ============ MENU CRUD ============
-  const openAddModal = () => {
-    setEditingItem(null);
-    setFormData({ name: '', description: '', price: '', category: 'Main', is_available: true });
-    setShowModal(true);
-  };
-
-  const openEditModal = (item) => {
-    setEditingItem(item);
-    setFormData({
+  const openEdit = (item) => {
+    setEditing(item);
+    setForm({
       name: item.name,
       description: item.description || '',
       price: item.price,
       category: item.category || 'Main',
       is_available: item.is_available
     });
-    setShowModal(true);
+    setModal(true);
   };
 
-  const handleSave = async () => {
-    if (!formData.name.trim() || !formData.price) {
-      showToast('Name and price are required', 'warning');
-      return;
-    }
-
+  const save = async () => {
+    if (!form.name.trim() || !form.price) return showToast('Name and price required', 'warning');
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
-
-      if (editingItem) {
-        await axios.put(
-          `http://localhost:5000/api/manager/menu/${editingItem.id}`,
-          formData,
-          { headers }
-        );
-        showToast('Item updated ✅', 'success');
+      if (editing) {
+        await axios.put(`http://localhost:5000/api/manager/menu/${editing.id}`, form, { headers });
+        showToast('Item updated', 'success');
       } else {
-        await axios.post(
-          'http://localhost:5000/api/manager/menu',
-          formData,
-          { headers }
-        );
-        showToast('Item added ✅', 'success');
+        await axios.post('http://localhost:5000/api/manager/menu', form, { headers });
+        showToast('Item added', 'success');
       }
-
-      setShowModal(false);
+      setModal(false);
       fetchAll();
-    } catch (err) {
-      showToast('Failed to save item', 'error');
-    }
+    } catch { showToast('Failed to save', 'error'); }
   };
 
-  const handleDelete = async (id, name) => {
+  const del = async (id, name) => {
     if (!window.confirm(`Delete "${name}"?`)) return;
-
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`http://localhost:5000/api/manager/menu/${id}`, {
@@ -121,60 +89,34 @@ function ManagerDashboard() {
       });
       showToast('Item deleted', 'info');
       fetchAll();
-    } catch (err) {
-      showToast('Failed to delete', 'error');
-    }
+    } catch { showToast('Failed to delete', 'error'); }
   };
 
-  const updateOrderStatus = async (orderId, newStatus) => {
+  const updateStatus = async (id, status) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
-        `http://localhost:5000/api/manager/orders/${orderId}/status`,
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      showToast(`Order marked as "${newStatus}"`, 'success');
+      await axios.put(`http://localhost:5000/api/manager/orders/${id}/status`, { status }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showToast(`Order marked as "${status}"`, 'success');
       fetchAll();
-    } catch (err) {
-      showToast('Failed to update order', 'error');
-    }
+    } catch { showToast('Failed to update', 'error'); }
   };
 
-  // ============ STATS ============
-  const activeOrders = orders.filter(o =>
-    ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)
-  ).length;
-
+  const activeOrders = orders.filter(o => ['pending','confirmed','preparing','ready'].includes(o.status)).length;
   const completedOrders = orders.filter(o => o.status === 'completed').length;
+  const todayRevenue = orders.filter(o => {
+    return new Date(o.created_at).toDateString() === new Date().toDateString() && o.status === 'completed';
+  }).reduce((s, o) => s + parseFloat(o.manager_amount || 0), 0);
 
-  const todayRevenue = orders
-    .filter(o => {
-      const today = new Date().toDateString();
-      return new Date(o.created_at).toDateString() === today && o.status === 'completed';
-    })
-    .reduce((sum, o) => sum + parseFloat(o.manager_amount || 0), 0);
+  if (loading) return <div className="loading-container"><div className="spinner" /><p>Loading your restaurant…</p></div>;
 
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading your restaurant...</p>
-      </div>
-    );
-  }
-
-  if (!hotel) {
-    return (
-      <div className="loading-container">
-        <h2>No hotel assigned to your account</h2>
-        <p style={{ color: 'var(--text-secondary)' }}>Contact admin for assistance</p>
-      </div>
-    );
-  }
-
-  const hotelColor = hotel.brand_color || '#FF6B35';
-  const hotelEmoji = hotel.emoji || '🍽️';
+  if (!hotel) return (
+    <div className="loading-container">
+      <h2>No restaurant assigned</h2>
+      <p style={{ color: 'var(--muted)' }}>Contact admin for assistance.</p>
+    </div>
+  );
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <FaChartLine /> },
@@ -184,454 +126,295 @@ function ManagerDashboard() {
   ];
 
   return (
-    <div 
-      className="manager-page"
-      style={{ '--hotel-color': hotelColor, '--hotel-color-glow': `${hotelColor}66` }}
-    >
+    <div className="manager-page-warm">
       {/* HEADER */}
-      <div 
-        className="manager-header"
-        style={{
-          background: `linear-gradient(135deg, ${hotelColor} 0%, ${hotelColor}cc 100%)`
-        }}
-      >
-        <div className="mh-bg-emoji">{hotelEmoji}</div>
-        <div className="mh-inner">
-          <div className="mh-left">
-            <div className="mh-badge">
-              <span className="badge-dot"></span>
-              RESTAURANT MANAGER
-            </div>
-            <div className="mh-title-row">
-              <div className="mh-emoji-badge">{hotelEmoji}</div>
+      <div className="manager-head-warm">
+        <div className="mh-bg-emoji-warm">{hotel.emoji || '🍽️'}</div>
+        <div className="mh-inner-warm">
+          <div>
+            <span className="mh-badge-warm">
+              <span className="badge-dot-warm" /> MANAGER ACCESS
+            </span>
+            <div className="mh-title-warm">
+              <div className="mh-emoji-warm">{hotel.emoji || '🍽️'}</div>
               <div>
                 <h1>{hotel.name}</h1>
                 <p>{hotel.vibe} · {hotel.cuisine_type}</p>
               </div>
             </div>
           </div>
-          <div className="mh-right">
-            <div className="mh-stat">
-              <div className="mhs-value">{activeOrders}</div>
-              <div className="mhs-label">Active</div>
+          <div className="mh-stats-warm">
+            <div className="mhs-item-warm">
+              <div className="mhs-val-warm">{activeOrders}</div>
+              <div className="mhs-lbl-warm">Active</div>
             </div>
-            <div className="mh-stat">
-              <div className="mhs-value">{menu.length}</div>
-              <div className="mhs-label">Menu Items</div>
+            <div className="mhs-item-warm">
+              <div className="mhs-val-warm">{menu.length}</div>
+              <div className="mhs-lbl-warm">Items</div>
             </div>
-            <div className="mh-stat">
-              <div className="mhs-value">⭐ {hotel.rating || 'N/A'}</div>
-              <div className="mhs-label">Rating</div>
+            <div className="mhs-item-warm">
+              <div className="mhs-val-warm">⭐ {hotel.rating || 'N/A'}</div>
+              <div className="mhs-lbl-warm">Rating</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* STAT CARDS */}
-      <div className="manager-stats">
-        <div className="ms-card">
-          <div className="ms-icon" style={{ background: 'rgba(198,255,0,0.15)', color: '#C6FF00' }}>
+      {/* STATS */}
+      <div className="manager-stats-warm">
+        <div className="ms-card-warm">
+          <div className="ms-ic-warm" style={{ background: 'var(--terracotta-tint)', color: 'var(--terracotta)' }}>
             <FaMoneyBillWave />
           </div>
-          <div className="ms-info">
-            <div className="ms-label">Total Earnings</div>
-            <div className="ms-value">{formatPrice(earnings.total_earnings)}</div>
+          <div>
+            <div className="ms-lbl-warm">Total earnings</div>
+            <div className="ms-val-warm">{formatKSh(earnings.total_earnings)}</div>
           </div>
         </div>
-
-        <div className="ms-card">
-          <div className="ms-icon" style={{ background: 'rgba(0,212,255,0.15)', color: '#00D4FF' }}>
+        <div className="ms-card-warm">
+          <div className="ms-ic-warm" style={{ background: 'var(--sage-tint)', color: 'var(--sage-dark)' }}>
             <FaShoppingBag />
           </div>
-          <div className="ms-info">
-            <div className="ms-label">Total Orders</div>
-            <div className="ms-value">{completedOrders}</div>
+          <div>
+            <div className="ms-lbl-warm">Total orders</div>
+            <div className="ms-val-warm">{completedOrders}</div>
           </div>
         </div>
-
-        <div className="ms-card">
-          <div className="ms-icon" style={{ background: 'rgba(255,184,0,0.15)', color: '#FFB800' }}>
+        <div className="ms-card-warm">
+          <div className="ms-ic-warm" style={{ background: 'var(--gold-tint)', color: 'var(--gold)' }}>
             <FaFire />
           </div>
-          <div className="ms-info">
-            <div className="ms-label">Today's Revenue</div>
-            <div className="ms-value">{formatPrice(todayRevenue)}</div>
+          <div>
+            <div className="ms-lbl-warm">Today's revenue</div>
+            <div className="ms-val-warm">{formatKSh(todayRevenue)}</div>
           </div>
         </div>
-
-        <div className="ms-card">
-          <div className="ms-icon" style={{ background: 'rgba(255,61,104,0.15)', color: '#FF3D68' }}>
+        <div className="ms-card-warm">
+          <div className="ms-ic-warm" style={{ background: 'var(--rose-tint)', color: 'var(--rose-dark)' }}>
             <FaClock />
           </div>
-          <div className="ms-info">
-            <div className="ms-label">Pending Orders</div>
-            <div className="ms-value">
-              {orders.filter(o => o.status === 'pending').length}
-            </div>
+          <div>
+            <div className="ms-lbl-warm">Pending</div>
+            <div className="ms-val-warm">{orders.filter(o => o.status === 'pending').length}</div>
           </div>
         </div>
       </div>
 
       {/* TABS */}
-      <div className="manager-tabs">
-        {tabs.map(tab => (
+      <div className="manager-tabs-warm">
+        {tabs.map(t => (
           <button
-            key={tab.id}
-            className={`manager-tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-            style={
-              activeTab === tab.id
-                ? { background: hotelColor, borderColor: hotelColor, boxShadow: `0 8px 24px ${hotelColor}66` }
-                : {}
-            }
+            key={t.id}
+            className={`manager-tab-warm ${tab === t.id ? 'active' : ''}`}
+            onClick={() => setTab(t.id)}
           >
-            {tab.icon} {tab.label}
-            {tab.badge > 0 && <span className="mt-badge">{tab.badge}</span>}
+            {t.icon} {t.label}
+            {t.badge > 0 && <span className="mt-badge-warm">{t.badge}</span>}
           </button>
         ))}
       </div>
 
-      {/* CONTENT */}
-      <div className="manager-content">
-        {/* OVERVIEW */}
-        {activeTab === 'overview' && (
-          <div className="overview-grid">
-            <div className="mcontent-card">
-              <div className="mcc-header">
-                <h3><FaClock /> Recent Orders</h3>
-              </div>
-              {orders.slice(0, 5).map(order => (
-                <div className="mini-order-row" key={order.id}>
-                  <div className="mor-info">
-                    <div className="mor-customer">{order.user_name}</div>
-                    <div className="mor-meta">
-                      #{order.order_number || order.id} · {new Date(order.created_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                  <div className="mor-amount">{formatPrice(order.total_amount)}</div>
-                  <span className={`status-badge status-${order.status}`}>
-                    {order.status}
-                  </span>
+      {/* OVERVIEW */}
+      {tab === 'overview' && (
+        <div className="overview-manager-warm">
+          <div className="mc-card-warm">
+            <div className="mc-head-warm"><h3><FaClock /> Recent orders</h3></div>
+            {orders.slice(0, 5).map(o => (
+              <div className="mini-row-warm" key={o.id}>
+                <div>
+                  <div className="mr-name">{o.user_name}</div>
+                  <div className="mr-meta">#{o.order_number || o.id} · {new Date(o.created_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
-              ))}
-              {orders.length === 0 && (
-                <div className="empty-mini">No orders yet</div>
-              )}
-            </div>
-
-            <div className="mcontent-card">
-              <div className="mcc-header">
-                <h3><FaStar /> Top Selling Items</h3>
+                <div className="mr-amount">{formatKSh(o.total_amount)}</div>
+                <span className={`status-warm status-${o.status}`}>{o.status}</span>
               </div>
-              {menu.slice(0, 5).map((item, idx) => (
-                <div className="mini-menu-row" key={item.id}>
-                  <div className="mmr-rank">{idx + 1}</div>
-                  <div className="mmr-info">
-                    <div className="mmr-name">{item.name}</div>
-                    <div className="mmr-cat">{item.category}</div>
-                  </div>
-                  <div className="mmr-price">{formatPrice(item.price)}</div>
-                </div>
-              ))}
-              {menu.length === 0 && (
-                <div className="empty-mini">No menu items yet</div>
-              )}
-            </div>
+            ))}
+            {orders.length === 0 && <div className="empty-mini-warm">No orders yet</div>}
           </div>
-        )}
 
-        {/* ORDERS */}
-        {activeTab === 'orders' && (
-          <div className="orders-manager-list">
-            {orders.length === 0 ? (
-              <div className="empty-state-large">
-                <div className="esl-icon">📦</div>
-                <h3>No orders yet</h3>
-                <p>Orders will appear here when customers start ordering</p>
+          <div className="mc-card-warm">
+            <div className="mc-head-warm"><h3><FaStar /> Top items</h3></div>
+            {menu.slice(0, 5).map((item, i) => (
+              <div className="mini-row-warm" key={item.id}>
+                <div className="mr-rank">{i + 1}</div>
+                <div style={{ flex: 1 }}>
+                  <div className="mr-name">{item.name}</div>
+                  <div className="mr-meta">{item.category}</div>
+                </div>
+                <div className="mr-amount">{formatKSh(item.price)}</div>
               </div>
-            ) : (
-              orders.map(order => (
-                <div 
-                  className="order-manager-card" 
-                  key={order.id}
-                  style={{ '--order-color': hotelColor }}
-                >
-                  <div className="omc-header">
-                    <div>
-                      <div className="omc-order-num">
-                        #{order.order_number || order.id}
-                      </div>
-                      <div className="omc-customer">
-                        <strong>{order.user_name}</strong>
-                      </div>
-                      <div className="omc-address">
-                        📍 {order.delivery_address}
-                      </div>
-                    </div>
-                    <div className="omc-right">
-                      <div className="omc-total">{formatPrice(order.total_amount)}</div>
-                      <span className={`status-badge status-${order.status}`}>
-                        {order.status}
-                      </span>
-                    </div>
-                  </div>
+            ))}
+            {menu.length === 0 && <div className="empty-mini-warm">No menu items yet</div>}
+          </div>
+        </div>
+      )}
 
-                  <div className="omc-actions">
-                    {order.status === 'pending' && (
-                      <button 
-                        className="omc-btn primary"
-                        onClick={() => updateOrderStatus(order.id, 'confirmed')}
-                      >
-                        <FaCheck /> Confirm Order
-                      </button>
-                    )}
-                    {order.status === 'confirmed' && (
-                      <button 
-                        className="omc-btn primary"
-                        onClick={() => updateOrderStatus(order.id, 'preparing')}
-                      >
-                        <FaFire /> Start Preparing
-                      </button>
-                    )}
-                    {order.status === 'preparing' && (
-                      <button 
-                        className="omc-btn primary"
-                        onClick={() => updateOrderStatus(order.id, 'ready')}
-                      >
-                        <FaCheck /> Mark Ready
-                      </button>
-                    )}
-                    {order.status === 'ready' && (
-                      <button 
-                        className="omc-btn primary"
-                        onClick={() => updateOrderStatus(order.id, 'delivered')}
-                      >
-                        <FaCheck /> Out for Delivery
-                      </button>
-                    )}
-                    {['delivered', 'completed', 'cancelled'].includes(order.status) && (
-                      <span className="omc-done">
-                        {order.status === 'completed' ? '✅ Completed' :
-                         order.status === 'delivered' ? '🛵 Delivered' : '❌ Cancelled'}
-                      </span>
-                    )}
+      {/* ORDERS */}
+      {tab === 'orders' && (
+        <div className="orders-manager-warm">
+          {orders.length === 0 ? (
+            <div className="empty-large-warm">
+              <div className="esl-ic-warm">📦</div>
+              <h3>No orders yet</h3>
+              <p>Orders will appear here as customers start buying.</p>
+            </div>
+          ) : orders.map(o => (
+            <div className="order-manager-warm" key={o.id}>
+              <div className="omc-head-warm">
+                <div>
+                  <div className="omc-num">#{o.order_number || o.id}</div>
+                  <div className="omc-customer"><strong>{o.user_name}</strong></div>
+                  <div className="omc-address">📍 {o.delivery_address}</div>
+                </div>
+                <div className="omc-right-warm">
+                  <div className="omc-total-warm">{formatKSh(o.total_amount)}</div>
+                  <span className={`status-warm status-${o.status}`}>{o.status}</span>
+                </div>
+              </div>
+              <div className="omc-actions-warm">
+                {o.status === 'pending' && <button className="omc-btn-warm primary" onClick={() => updateStatus(o.id, 'confirmed')}><FaCheck /> Confirm Order</button>}
+                {o.status === 'confirmed' && <button className="omc-btn-warm primary" onClick={() => updateStatus(o.id, 'preparing')}><FaFire /> Start Preparing</button>}
+                {o.status === 'preparing' && <button className="omc-btn-warm primary" onClick={() => updateStatus(o.id, 'ready')}><FaCheck /> Mark Ready</button>}
+                {o.status === 'ready' && <button className="omc-btn-warm primary" onClick={() => updateStatus(o.id, 'delivered')}><FaCheck /> Out for Delivery</button>}
+                {['delivered','completed','cancelled'].includes(o.status) && (
+                  <span className="omc-done-warm">
+                    {o.status === 'completed' ? '✅ Completed' : o.status === 'delivered' ? '🛵 Delivered' : '❌ Cancelled'}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* MENU */}
+      {tab === 'menu' && (
+        <div className="menu-manager-warm">
+          <div className="mm-head-warm">
+            <h3>Menu ({menu.length})</h3>
+            <button className="btn-primary-warm" onClick={openAdd}><FaPlus /> Add Item</button>
+          </div>
+          <div className="mm-grid-warm">
+            {menu.map(item => (
+              <div className="mm-card-warm" key={item.id}>
+                <div className="mm-img-warm">
+                  <img
+                    src={item.image_url || `https://picsum.photos/seed/${item.id}/300/200`}
+                    alt={item.name}
+                    onError={(e) => e.target.src = `https://via.placeholder.com/300x200/F5EFE6/C97B5F?text=${encodeURIComponent(item.name)}`}
+                  />
+                  {!item.is_available && <span className="mm-unavail-warm">Unavailable</span>}
+                </div>
+                <div className="mm-body-warm">
+                  <div className="mm-top-warm">
+                    <h4>{item.name}</h4>
+                    <span className="mm-cat-warm">{item.category}</span>
+                  </div>
+                  <p className="mm-desc-warm">{item.description || 'No description'}</p>
+                  <div className="mm-price-warm">{formatKSh(item.price)}</div>
+                  <div className="mm-actions-warm">
+                    <button className="mm-btn-warm edit" onClick={() => openEdit(item)}><FaEdit /> Edit</button>
+                    <button className="mm-btn-warm delete" onClick={() => del(item.id, item.name)}><FaTrash /> Delete</button>
                   </div>
                 </div>
-              ))
+              </div>
+            ))}
+            {menu.length === 0 && (
+              <div className="empty-large-warm" style={{ gridColumn: '1 / -1' }}>
+                <div className="esl-ic-warm">🍽️</div>
+                <h3>Menu is empty</h3>
+                <p>Click "Add Item" to start building your menu.</p>
+              </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* MENU */}
-        {activeTab === 'menu' && (
-          <div className="menu-manager-section">
-            <div className="menu-manager-header">
-              <h3>Menu Items ({menu.length})</h3>
-              <button className="add-item-btn" onClick={openAddModal}>
-                <FaPlus /> Add New Item
-              </button>
-            </div>
+      {/* EARNINGS */}
+      {tab === 'earnings' && (
+        <div className="earnings-warm">
+          <div className="earn-hero-warm">
+            <div className="eh-lbl-warm">Total Earned (after commission)</div>
+            <div className="eh-val-warm">{formatKSh(earnings.total_earnings)}</div>
+            <div className="eh-sub-warm">From {earnings.total_orders} completed order{earnings.total_orders !== 1 && 's'}</div>
+          </div>
 
-            <div className="menu-manager-grid">
-              {menu.map(item => (
-                <div className="menu-manager-card" key={item.id}>
-                  <div className="mmc-image">
-                    <img 
-                      src={item.image_url || `https://picsum.photos/seed/${item.id}/300/200`} 
-                      alt={item.name}
-                      onError={(e) => e.target.src = `https://via.placeholder.com/300x200/1C2230/C6FF00?text=${encodeURIComponent(item.name)}`}
-                    />
-                    {!item.is_available && (
-                      <span className="unavailable-badge">Unavailable</span>
-                    )}
-                  </div>
-                  <div className="mmc-body">
-                    <div className="mmc-top">
-                      <h4>{item.name}</h4>
-                      <span className="mmc-category">{item.category}</span>
-                    </div>
-                    <p className="mmc-desc">{item.description || 'No description'}</p>
-                    <div className="mmc-price">{formatPrice(item.price)}</div>
-                    <div className="mmc-actions">
-                      <button 
-                        className="mmc-btn edit"
-                        onClick={() => openEditModal(item)}
-                      >
-                        <FaEdit /> Edit
-                      </button>
-                      <button 
-                        className="mmc-btn delete"
-                        onClick={() => handleDelete(item.id, item.name)}
-                      >
-                        <FaTrash /> Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {menu.length === 0 && (
-                <div className="empty-state-large" style={{ gridColumn: '1 / -1' }}>
-                  <div className="esl-icon">🍽️</div>
-                  <h3>Your menu is empty</h3>
-                  <p>Click "Add New Item" to start building your menu</p>
-                </div>
-              )}
+          <div className="earn-note-warm">
+            <div className="en-ic-warm">💡</div>
+            <div>
+              <strong>How earnings work</strong>
+              <p>When customers order, payment goes to FoodExpress. Once they confirm delivery, we release your share (order total minus 10% platform commission).</p>
             </div>
           </div>
-        )}
 
-        {/* EARNINGS */}
-        {activeTab === 'earnings' && (
-          <div className="earnings-section">
-            <div className="earnings-hero">
-              <div className="eh-label">Total Earned (After Commission)</div>
-              <div className="eh-value">{formatPrice(earnings.total_earnings)}</div>
-              <div className="eh-sub">
-                From {earnings.total_orders} completed order{earnings.total_orders !== 1 ? 's' : ''}
-              </div>
-            </div>
-
-            <div className="earnings-note">
-              <div className="en-icon">💡</div>
-              <div>
-                <strong>How your earnings work:</strong>
-                <p>
-                  When customers order, their payment goes to FoodExpress first. 
-                  Once they confirm delivery, we release your share (order total minus 10% platform commission) directly to you.
-                </p>
-              </div>
-            </div>
-
-            <div className="earnings-table-card">
-              <h3>Recent Payouts</h3>
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Order #</th>
-                      <th>Total</th>
-                      <th>Commission</th>
-                      <th>Your Payout</th>
-                      <th>Date</th>
+          <div className="admin-card-warm">
+            <div className="ac-head-warm"><h3>Recent payouts</h3></div>
+            <div className="table-wrap-warm">
+              <table className="admin-table-warm">
+                <thead>
+                  <tr><th>Order</th><th>Total</th><th>Commission</th><th>Your payout</th><th>Date</th></tr>
+                </thead>
+                <tbody>
+                  {orders.filter(o => o.status === 'completed').slice(0, 20).map(o => (
+                    <tr key={o.id}>
+                      <td className="td-order-warm">#{o.order_number || o.id}</td>
+                      <td className="td-price-warm">{formatKSh(o.total_amount)}</td>
+                      <td className="td-comm-warm">-{formatKSh(o.admin_commission)}</td>
+                      <td style={{ color: 'var(--sage-dark)', fontWeight: 700 }}>{formatKSh(o.manager_amount)}</td>
+                      <td className="td-date-warm">{new Date(o.created_at).toLocaleDateString()}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {orders
-                      .filter(o => o.status === 'completed')
-                      .slice(0, 20)
-                      .map(order => (
-                        <tr key={order.id}>
-                          <td className="td-order">#{order.order_number || order.id}</td>
-                          <td className="td-price">{formatPrice(order.total_amount)}</td>
-                          <td className="td-commission">-{formatPrice(order.admin_commission)}</td>
-                          <td className="td-payout">{formatPrice(order.manager_amount)}</td>
-                          <td className="td-date">
-                            {new Date(order.created_at).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))}
-                    {orders.filter(o => o.status === 'completed').length === 0 && (
-                      <tr>
-                        <td colSpan="5" className="td-empty">
-                          No completed orders yet
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                  {orders.filter(o => o.status === 'completed').length === 0 && (
+                    <tr><td colSpan="5" className="td-empty-warm">No completed orders yet</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* MODAL */}
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingItem ? 'Edit Item' : 'Add New Item'}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>
-                <FaTimes />
-              </button>
+      {modal && (
+        <div className="modal-overlay-warm" onClick={() => setModal(false)}>
+          <div className="modal-box-warm" onClick={e => e.stopPropagation()}>
+            <div className="modal-head-warm">
+              <h2>{editing ? 'Edit Item' : 'Add New Item'}</h2>
+              <button className="modal-close-warm" onClick={() => setModal(false)}><FaTimes /></button>
             </div>
-
-            <div className="modal-body">
-              <div className="modal-field">
-                <label>Item Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Chicken Biryani"
-                />
+            <div className="modal-body-warm">
+              <div className="mf-warm">
+                <label>Item name *</label>
+                <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Chicken Biryani" />
               </div>
-
-              <div className="modal-field">
+              <div className="mf-warm">
                 <label>Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Short description of this dish..."
-                  rows="3"
-                />
+                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Short description..." rows="3" />
               </div>
-
-              <div className="modal-row">
-                <div className="modal-field">
+              <div className="mf-row-warm">
+                <div className="mf-warm">
                   <label>Price (KSh) *</label>
-                  <input
-                    type="number"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    placeholder="e.g. 850"
-                  />
+                  <input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="e.g. 850" />
                 </div>
-
-                <div className="modal-field">
+                <div className="mf-warm">
                   <label>Category</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  >
-                    <option>Main</option>
-                    <option>Appetizers</option>
-                    <option>Sides</option>
-                    <option>Desserts</option>
-                    <option>Beverages</option>
-                    <option>Soups</option>
-                    <option>Salads</option>
-                    <option>Pizza</option>
-                    <option>Burgers</option>
-                    <option>Chicken</option>
-                    <option>Pasta</option>
-                    <option>Sushi</option>
-                    <option>Wraps</option>
-                    <option>Sandwiches</option>
+                  <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                    <option>Main</option><option>Appetizers</option><option>Sides</option>
+                    <option>Desserts</option><option>Beverages</option><option>Soups</option>
+                    <option>Salads</option><option>Pizza</option><option>Burgers</option>
+                    <option>Chicken</option><option>Pasta</option><option>Sushi</option>
                   </select>
                 </div>
               </div>
-
-              <label className="modal-checkbox">
-                <input
-                  type="checkbox"
-                  checked={formData.is_available}
-                  onChange={(e) => setFormData({ ...formData, is_available: e.target.checked })}
-                />
+              <label className="mf-check-warm">
+                <input type="checkbox" checked={form.is_available} onChange={e => setForm({ ...form, is_available: e.target.checked })} />
                 <span>Available for ordering</span>
               </label>
             </div>
-
-            <div className="modal-footer">
-              <button className="modal-btn ghost" onClick={() => setShowModal(false)}>
-                Cancel
-              </button>
-              <button 
-                className="modal-btn primary" 
-                onClick={handleSave}
-                style={{ background: `linear-gradient(135deg, ${hotelColor}, ${hotelColor}cc)` }}
-              >
-                {editingItem ? 'Save Changes' : 'Add Item'}
+            <div className="modal-foot-warm">
+              <button className="btn-ghost-warm" onClick={() => setModal(false)}>Cancel</button>
+              <button className="btn-primary-warm" onClick={save}>
+                {editing ? 'Save Changes' : 'Add Item'}
               </button>
             </div>
           </div>

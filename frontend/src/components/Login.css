@@ -1,0 +1,117 @@
+.auth-page-warm {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.auth-card-warm {
+  width: 100%;
+  max-width: 440px;
+  background: var(--white);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-2xl);
+  padding: 2.5rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-brand-warm {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.auth-mark-warm {
+  width: 64px; height: 64px;
+  margin: 0 auto 1.2rem;
+  background: var(--terracotta-tint);
+  border-radius: var(--r-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+}
+
+.auth-brand-warm h1 {
+  font-family: 'Fraunces', serif;
+  font-size: 1.8rem;
+  margin-bottom: 0.4rem;
+}
+
+.auth-brand-warm p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.auth-form-warm {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.af-warm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.af-warm label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.af-input-warm {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: var(--cream-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: 0.75rem 1rem;
+  transition: all 240ms var(--ease-soft);
+}
+
+.af-input-warm:focus-within {
+  background: var(--white);
+  border-color: var(--terracotta-soft);
+  box-shadow: 0 0 0 4px var(--terracotta-tint);
+}
+
+.af-input-warm svg { color: var(--muted-light); font-size: 0.9rem; }
+
+.af-input-warm input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--charcoal);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.af-input-warm input::placeholder { color: var(--muted-light); }
+
+.auth-submit-warm {
+  width: 100%;
+  justify-content: center;
+  margin-top: 0.5rem;
+  padding: 1rem;
+  font-size: 0.95rem;
+}
+
+.auth-submit-warm:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.auth-switch-warm {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.auth-switch-warm a {
+  color: var(--terracotta);
+  font-weight: 600;
+}

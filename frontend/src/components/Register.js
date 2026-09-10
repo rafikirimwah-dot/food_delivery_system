@@ -1,23 +1,134 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { apiRequest } from '../api';
+import { FaEnvelope, FaLock, FaUser, FaStore, FaArrowRight } from 'react-icons/fa';
+import axios from 'axios';
+import { useToast } from './ToastContext';
+import './Register.css';
 
 function Register() {
+  const [form, setForm] = useState({
+    name: '', email: '', password: '', role: 'user', hotelName: ''
+  });
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user', hotelName: '' });
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
-  const submit = async (event) => {
-    event.preventDefault(); setError(''); setMessage('');
-    try { const data = await apiRequest('/register', { method: 'POST', body: JSON.stringify(form) }); setMessage(data.message); setTimeout(() => navigate('/login'), 900); }
-    catch (err) { setError(err.message); }
+  const { showToast } = useToast();
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (form.password.length < 6) return showToast('Password must be 6+ characters', 'warning');
+    setLoading(true);
+    try {
+      await axios.post('http://localhost:5000/api/register', form);
+      showToast(
+        form.role === 'manager'
+          ? 'Manager account created. Await admin approval.'
+          : 'Account created! Please sign in.',
+        'success'
+      );
+      navigate('/login');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Registration failed', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
-  return <main className="page narrow-page"><section className="form-card"><p className="eyebrow">Join the table</p><h1>Make your next meal easy.</h1><form onSubmit={submit}>
-    <label>Name<input required value={form.name} onChange={update('name')} /></label><label>Email<input type="email" required value={form.email} onChange={update('email')} /></label><label>Password<input type="password" minLength="6" required value={form.password} onChange={update('password')} /></label>
-    <label>Account type<select value={form.role} onChange={update('role')}><option value="user">Customer</option><option value="manager">Restaurant manager</option></select></label>
-    {form.role === 'manager' && <label>Hotel name<input required value={form.hotelName} onChange={update('hotelName')} /></label>}
-    {error && <p className="error">{error}</p>}{message && <p className="success">{message}</p>}<button className="button primary">Create account</button>
-  </form><p className="form-footer">Already registered? <Link to="/login">Sign in</Link></p></section></main>;
+
+  return (
+    <div className="auth-page-warm">
+      <div className="auth-card-warm">
+        <div className="auth-brand-warm">
+          <div className="auth-mark-warm">🍽️</div>
+          <h1>Create account</h1>
+          <p>Join FoodExpress and start ordering.</p>
+        </div>
+
+        <form onSubmit={submit} className="auth-form-warm">
+          <div className="role-selector-warm">
+            <button
+              type="button"
+              className={`role-btn-warm ${form.role === 'user' ? 'active' : ''}`}
+              onClick={() => setForm({ ...form, role: 'user' })}
+            >
+              <FaUser /> Customer
+            </button>
+            <button
+              type="button"
+              className={`role-btn-warm ${form.role === 'manager' ? 'active' : ''}`}
+              onClick={() => setForm({ ...form, role: 'manager' })}
+            >
+              <FaStore /> Restaurant
+            </button>
+          </div>
+
+          <div className="af-warm">
+            <label>Full name</label>
+            <div className="af-input-warm">
+              <FaUser />
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="Jane Wanjiku"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="af-warm">
+            <label>Email address</label>
+            <div className="af-input-warm">
+              <FaEnvelope />
+              <input
+                type="email"
+                value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="af-warm">
+            <label>Password</label>
+            <div className="af-input-warm">
+              <FaLock />
+              <input
+                type="password"
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder="At least 6 characters"
+                required
+              />
+            </div>
+          </div>
+
+          {form.role === 'manager' && (
+            <div className="af-warm">
+              <label>Restaurant name</label>
+              <div className="af-input-warm">
+                <FaStore />
+                <input
+                  type="text"
+                  value={form.hotelName}
+                  onChange={e => setForm({ ...form, hotelName: e.target.value })}
+                  placeholder="e.g. Mama Oliech Kitchen"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          <button type="submit" className="btn-primary-warm auth-submit-warm" disabled={loading}>
+            {loading ? 'Creating account…' : <>Create Account <FaArrowRight /></>}
+          </button>
+        </form>
+
+        <p className="auth-switch-warm">
+          Already have an account? <Link to="/login">Sign in</Link>
+        </p>
+      </div>
+    </div>
+  );
 }
+
 export default Register;

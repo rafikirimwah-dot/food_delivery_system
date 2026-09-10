@@ -1,9 +1,8 @@
-// frontend/src/components/HotelMenu.js
 import React, { useState, useEffect, useContext } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { 
-  FaStar, FaPlus, FaMinus, FaShoppingCart, FaArrowLeft, 
-  FaClock, FaMotorcycle, FaFire, FaMapMarkerAlt, FaSearch
+import { useParams, Link } from 'react-router-dom';
+import {
+  FaStar, FaPlus, FaMinus, FaShoppingCart, FaArrowLeft,
+  FaClock, FaMotorcycle, FaMapMarkerAlt, FaSearch, FaFire
 } from 'react-icons/fa';
 import axios from 'axios';
 import { CartContext } from '../context/CartContext';
@@ -12,414 +11,222 @@ import './HotelMenu.css';
 
 function HotelMenu() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [hotel, setHotel] = useState(null);
   const [menu, setMenu] = useState([]);
-  const [filteredMenu, setFilteredMenu] = useState([]);
+  const [filtered, setFiltered] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState({});
   const [imageErrors, setImageErrors] = useState({});
-  const [searchTerm, setSearchTerm] = useState('');
   const { addToCart } = useContext(CartContext);
   const { showToast } = useToast();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-  // ============ FETCH HOTEL + MENU ============
   useEffect(() => {
-    const fetchHotelMenu = async () => {
+    const fetchMenu = async () => {
       try {
         const response = await axios.get(`http://localhost:5000/api/hotels/${id}`);
         setHotel(response.data.hotel);
-
-        // Parse prices to numbers and normalize fields
-        const menuWithParsedPrices = response.data.menu.map(item => ({
+        const parsed = response.data.menu.map(item => ({
           ...item,
           price: parseFloat(item.price) || 0,
           is_on_offer: Boolean(item.is_on_offer),
           discount_percent: parseInt(item.discount_percent) || 0,
-          image_url: item.image_url || `https://picsum.photos/seed/${item.id}/500/350`
+          image_url: item.image_url || `https://picsum.photos/seed/${item.id}/500/360`
         }));
-
-        setMenu(menuWithParsedPrices);
-        setFilteredMenu(menuWithParsedPrices);
-
-        // Init quantities
-        const initialQuantities = {};
-        menuWithParsedPrices.forEach(item => {
-          initialQuantities[item.id] = 0;
-        });
-        setQuantities(initialQuantities);
-      } catch (error) {
-        console.error('Error fetching hotel menu:', error);
-        showToast('Failed to load menu. Please try again.', 'error');
+        setMenu(parsed);
+        setFiltered(parsed);
+        const init = {};
+        parsed.forEach(i => { init[i.id] = 0; });
+        setQuantities(init);
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to load menu', 'error');
       } finally {
         setLoading(false);
       }
     };
-
-    fetchHotelMenu();
+    fetchMenu();
   }, [id, showToast]);
 
-  // ============ FILTER LOGIC ============
   useEffect(() => {
-    let result = menu;
-
-    if (selectedCategory !== 'All') {
-      result = result.filter(item => item.category === selectedCategory);
-    }
-
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(item =>
-        item.name.toLowerCase().includes(term) ||
-        (item.description && item.description.toLowerCase().includes(term))
+    let r = menu;
+    if (selectedCategory !== 'All') r = r.filter(i => i.category === selectedCategory);
+    if (search.trim()) {
+      const t = search.toLowerCase();
+      r = r.filter(i =>
+        i.name.toLowerCase().includes(t) ||
+        (i.description || '').toLowerCase().includes(t)
       );
     }
+    setFiltered(r);
+  }, [selectedCategory, search, menu]);
 
-    setFilteredMenu(result);
-  }, [selectedCategory, searchTerm, menu]);
+  const categories = ['All', ...new Set(menu.map(i => i.category))];
 
-  const categories = ['All', ...new Set(menu.map(item => item.category))];
+  const formatKSh = (n) => `KSh ${Math.round(parseFloat(n)).toLocaleString()}`;
 
-  // ============ HELPERS ============
-  const formatPrice = (price) => {
-    const num = typeof price === 'string' ? parseFloat(price) : price;
-    if (isNaN(num)) return 'KSh 0';
-    return `KSh ${Math.round(num).toLocaleString()}`;
-  };
+  const finalPrice = (item) => item.is_on_offer && item.discount_percent > 0
+    ? item.price * (1 - item.discount_percent / 100)
+    : item.price;
 
-  const getFinalPrice = (item) => {
-    if (item.is_on_offer && item.discount_percent > 0) {
-      return item.price * (1 - item.discount_percent / 100);
-    }
-    return item.price;
-  };
+  const changeQty = (id, delta) =>
+    setQuantities(p => ({ ...p, [id]: Math.max(0, (p[id] || 0) + delta) }));
 
-  const handleQuantityChange = (itemId, change) => {
-    setQuantities(prev => ({
-      ...prev,
-      [itemId]: Math.max(0, (prev[itemId] || 0) + change)
-    }));
-  };
-
-  const handleAddToCart = (item) => {
-    const quantity = quantities[item.id] || 0;
-    if (quantity === 0) {
-      showToast('Please select a quantity first', 'warning');
-      return;
-    }
-
-    if (!user || user.role !== 'user') {
-      showToast('Only customers can place orders', 'error');
-      return;
-    }
-
-    const finalPrice = getFinalPrice(item);
+  const handleAdd = (item) => {
+    const q = quantities[item.id] || 0;
+    if (q === 0) return showToast('Select a quantity first', 'warning');
+    if (!user || user.role !== 'user') return showToast('Only customers can order', 'error');
 
     addToCart({
       ...item,
-      price: finalPrice,
+      price: finalPrice(item),
       original_price: item.price,
-      quantity,
+      quantity: q,
       hotel_id: hotel.id,
       hotel_name: hotel.name,
       hotel_color: hotel.brand_color,
       hotel_emoji: hotel.emoji
     });
-
-    setQuantities(prev => ({
-      ...prev,
-      [item.id]: 0
-    }));
-
-    showToast(`Added ${quantity}x ${item.name} to cart!`, 'success');
+    setQuantities(p => ({ ...p, [item.id]: 0 }));
+    showToast(`Added ${q}× ${item.name} to cart`, 'success');
   };
 
-  const handleImageError = (itemId) => {
-    setImageErrors(prev => ({ ...prev, [itemId]: true }));
-  };
+  const imgError = (id) => setImageErrors(p => ({ ...p, [id]: true }));
 
-  const getImageUrl = (item) => {
-    if (imageErrors[item.id]) {
-      return `https://via.placeholder.com/500x350/1C2230/C6FF00?text=${encodeURIComponent(item.name)}`;
-    }
-    return item.image_url;
-  };
+  const imgSrc = (item) => imageErrors[item.id]
+    ? `https://via.placeholder.com/500x360/F5EFE6/C97B5F?text=${encodeURIComponent(item.name)}`
+    : item.image_url;
 
-  // ============ LOADING / ERROR STATES ============
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading {hotel?.name || 'menu'}...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="loading-container"><div className="spinner" /><p>Loading menu…</p></div>;
 
-  if (!hotel) {
-    return (
-      <div className="error-container">
-        <h2>Hotel not found</h2>
-        <Link to="/hotels" className="btn-primary">Back to Hotels</Link>
-      </div>
-    );
-  }
+  if (!hotel) return (
+    <div className="loading-container">
+      <h2>Restaurant not found</h2>
+      <Link to="/hotels" className="btn-primary-warm">Back to Restaurants</Link>
+    </div>
+  );
 
-  // ============ HOTEL THEME VARIABLES ============
-  const hotelColor = hotel.brand_color || '#FF6B35';
-  const hotelEmoji = hotel.emoji || '🍽️';
+  const hotelColor = hotel.brand_color || '#C97B5F';
 
-  // ============ RENDER ============
   return (
-    <div 
-      className="hotel-menu-page" 
-      style={{ 
-        '--hotel-color': hotelColor,
-        '--hotel-color-soft': `${hotelColor}22`,
-        '--hotel-color-glow': `${hotelColor}66`
-      }}
-    >
-      {/* ============ HOTEL HEADER ============ */}
-      <div 
-        className="hotel-header-v2"
-        style={{
-          background: `linear-gradient(135deg, ${hotelColor} 0%, ${hotelColor}cc 60%, ${hotelColor}99 100%)`
-        }}
-      >
-        <div 
-          className="hotel-header-bg-emoji"
-          aria-hidden="true"
-        >
-          {hotelEmoji}
-        </div>
-
-        <div className="hotel-header-inner">
-          <Link to="/hotels" className="back-btn-v2">
-            <FaArrowLeft /> Back to Hotels
+    <div className="hotel-page-warm" style={{ '--hotel-color': hotelColor }}>
+      {/* HEADER */}
+      <div className="hotel-hero-warm">
+        <div className="hotel-hero-bg-emoji">{hotel.emoji || '🍽️'}</div>
+        <div className="hotel-hero-inner">
+          <Link to="/hotels" className="back-btn-warm">
+            <FaArrowLeft /> Back to Restaurants
           </Link>
 
-          <div className="hotel-header-content">
-            <div className="hotel-header-left">
-              <div 
-                className="hotel-emoji-badge"
-                style={{ 
-                  boxShadow: `0 0 40px ${hotelColor}`,
-                  borderColor: 'rgba(255,255,255,0.9)'
-                }}
-              >
-                {hotelEmoji}
-              </div>
-
-              <div className="hotel-title-block">
-                <div 
-                  className="hotel-vibe-pill"
-                  style={{ 
-                    background: 'rgba(0,0,0,0.35)',
-                    color: '#FFFFFF'
-                  }}
-                >
-                  {hotel.vibe || 'Signature'}
-                </div>
-                <h1 className="hotel-name-v2">{hotel.name}</h1>
-                <p className="hotel-description-v2">
-                  {hotel.description || 'Delicious food, prepared with care.'}
-                </p>
-
-                <div className="hotel-meta-v2">
-                  <span className="meta-chip">
-                    <FaStar className="meta-icon-star" />
-                    {hotel.rating || 'New'}
-                  </span>
-                  <span className="meta-chip">
-                    <FaMapMarkerAlt className="meta-icon" />
-                    {hotel.cuisine_type}
-                  </span>
-                  <span className="meta-chip">
-                    <FaClock className="meta-icon" />
-                    20-30 min
-                  </span>
-                  <span className="meta-chip">
-                    <FaMotorcycle className="meta-icon" />
-                    Free Delivery
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="hotel-header-right">
-              <div className="hotel-stat">
-                <div className="hotel-stat-value">{menu.length}</div>
-                <div className="hotel-stat-label">Items</div>
-              </div>
-              <div className="hotel-stat">
-                <div className="hotel-stat-value">
-                  {menu.filter(i => i.is_on_offer).length}
-                </div>
-                <div className="hotel-stat-label">On Offer</div>
+          <div className="hotel-hero-content">
+            <div className="hotel-hero-emoji">{hotel.emoji || '🍽️'}</div>
+            <div className="hotel-hero-info">
+              <span className="hotel-vibe-tag">{hotel.vibe || 'Signature'}</span>
+              <h1>{hotel.name}</h1>
+              <p className="hotel-hero-desc">{hotel.description}</p>
+              <div className="hotel-chips">
+                <span><FaStar style={{ color: '#C9A961' }} /> {hotel.rating || 'New'}</span>
+                <span><FaMapMarkerAlt /> {hotel.cuisine_type}</span>
+                <span><FaClock /> 20–30 min</span>
+                <span><FaMotorcycle /> Free delivery</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ============ MENU SECTION ============ */}
-      <div className="menu-section-v2">
-        {/* Controls */}
-        <div className="menu-controls-v2">
-          <div className="category-tabs-v2">
-            {categories.map(category => (
+      {/* MENU */}
+      <div className="menu-wrap-warm">
+        <div className="menu-controls-warm">
+          <div className="cat-tabs-warm">
+            {categories.map(c => (
               <button
-                key={category}
-                className={`category-tab-v2 ${selectedCategory === category ? 'active' : ''}`}
-                onClick={() => setSelectedCategory(category)}
-                style={
-                  selectedCategory === category
-                    ? {
-                        background: hotelColor,
-                        borderColor: hotelColor,
-                        boxShadow: `0 8px 24px ${hotelColor}66`
-                      }
-                    : {}
-                }
+                key={c}
+                className={`cat-tab-warm ${selectedCategory === c ? 'active' : ''}`}
+                onClick={() => setSelectedCategory(c)}
               >
-                {category}
+                {c}
               </button>
             ))}
           </div>
-
-          <div className="menu-search-v2">
+          <div className="menu-search-warm">
             <FaSearch />
             <input
               type="text"
-              placeholder="Search in menu..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search menu…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="menu-count-v2">
-          Showing <strong>{filteredMenu.length}</strong> item{filteredMenu.length !== 1 ? 's' : ''}
-          {selectedCategory !== 'All' && ` in "${selectedCategory}"`}
+        <div className="menu-count-warm">
+          <strong>{filtered.length}</strong> item{filtered.length !== 1 && 's'}
+          {selectedCategory !== 'All' && ` · ${selectedCategory}`}
         </div>
 
-        {/* Grid */}
-        <div className="menu-grid-v2">
-          {filteredMenu.map(item => {
-            const finalPrice = getFinalPrice(item);
+        <div className="menu-grid-warm">
+          {filtered.map(item => {
+            const price = finalPrice(item);
             const hasDiscount = item.is_on_offer && item.discount_percent > 0;
-
             return (
-              <div 
-                className="menu-item-v2" 
-                key={item.id}
-                style={{ '--item-hotel-color': hotelColor }}
-              >
-                {/* Image */}
-                <div className="mi-image-wrap">
-                  <img
-                    src={getImageUrl(item)}
-                    alt={item.name}
-                    onError={() => handleImageError(item.id)}
-                    loading="lazy"
-                  />
-                  <div className="mi-gradient"></div>
-
-                  {/* Offer Badge */}
+              <div className="menu-card-warm" key={item.id}>
+                <div className="mc-img-warm">
+                  <img src={imgSrc(item)} alt={item.name} onError={() => imgError(item.id)} loading="lazy" />
                   {hasDiscount && (
-                    <div 
-                      className="mi-offer-badge"
-                      style={{
-                        background: 'linear-gradient(135deg, #FF3D68, #FFB800)',
-                      }}
-                    >
+                    <span className="mc-offer-badge">
                       <FaFire /> -{item.discount_percent}%
-                    </div>
+                    </span>
                   )}
-
-                  {/* Category Badge */}
-                  <div className="mi-category-badge">
-                    {item.category}
-                  </div>
+                  <span className="mc-cat-badge">{item.category}</span>
                 </div>
 
-                {/* Info */}
-                <div className="mi-info">
-                  <div className="mi-title-row">
+                <div className="mc-body-warm">
+                  <div className="mc-head">
                     <h3>{item.name}</h3>
                   </div>
+                  <p className="mc-desc">{item.description || 'A delicious dish, prepared with care.'}</p>
+                  <span className="mc-prep"><FaClock /> {item.preparation_time || 15} min</span>
 
-                  <p className="mi-description">
-                    {item.description || 'A delicious dish prepared with care.'}
-                  </p>
-
-                  <div className="mi-prep-time">
-                    <FaClock /> {item.preparation_time || 15} min prep
-                  </div>
-
-                  {/* Price + Actions */}
-                  <div className="mi-footer">
-                    <div className="mi-price-block">
-                      <span className="mi-price-current">
-                        {formatPrice(finalPrice)}
-                      </span>
+                  <div className="mc-footer-warm">
+                    <div className="mc-prices">
+                      <span className="mc-price-current">{formatKSh(price)}</span>
                       {hasDiscount && (
-                        <span className="mi-price-original">
-                          {formatPrice(item.price)}
-                        </span>
+                        <span className="mc-price-original">{formatKSh(item.price)}</span>
                       )}
                     </div>
 
-                    {user && user.role === 'user' ? (
-                      <div className="mi-actions">
-                        <div className="mi-qty-control">
+                    {user?.role === 'user' ? (
+                      <div className="mc-actions">
+                        <div className="qty-warm">
                           <button
-                            className={`mi-qty-btn ${quantities[item.id] === 0 ? 'disabled' : ''}`}
-                            onClick={() => handleQuantityChange(item.id, -1)}
-                            disabled={quantities[item.id] === 0}
-                            aria-label="Decrease quantity"
+                            onClick={() => changeQty(item.id, -1)}
+                            disabled={!quantities[item.id]}
+                            aria-label="Decrease"
                           >
                             <FaMinus />
                           </button>
-                          <span className="mi-qty-value">
-                            {quantities[item.id] || 0}
-                          </span>
-                          <button
-                            className="mi-qty-btn"
-                            onClick={() => handleQuantityChange(item.id, 1)}
-                            aria-label="Increase quantity"
-                          >
+                          <span>{quantities[item.id] || 0}</span>
+                          <button onClick={() => changeQty(item.id, 1)} aria-label="Increase">
                             <FaPlus />
                           </button>
                         </div>
-
                         <button
-                          className={`mi-add-btn ${quantities[item.id] > 0 ? 'active' : ''}`}
-                          onClick={() => handleAddToCart(item)}
-                          disabled={quantities[item.id] === 0}
-                          style={
-                            quantities[item.id] > 0
-                              ? {
-                                  background: `linear-gradient(135deg, ${hotelColor}, ${hotelColor}cc)`,
-                                  boxShadow: `0 8px 24px ${hotelColor}66`
-                                }
-                              : {}
-                          }
+                          className={`add-btn-warm ${quantities[item.id] > 0 ? 'active' : ''}`}
+                          onClick={() => handleAdd(item)}
+                          disabled={!quantities[item.id]}
                         >
                           <FaShoppingCart /> Add
                         </button>
                       </div>
                     ) : (
-                      <div className="mi-role-restriction">
+                      <div className="mc-restrict">
                         {!user ? (
-                          <Link to="/login" className="mi-login-btn">
-                            Login to Order
-                          </Link>
+                          <Link to="/login" className="login-link">Login to Order</Link>
                         ) : (
-                          <span className="mi-restricted-msg">
-                            🚫 {user.role}s can't order
-                          </span>
+                          <span className="restrict-note">Only customers can order</span>
                         )}
                       </div>
                     )}
@@ -430,23 +237,13 @@ function HotelMenu() {
           })}
         </div>
 
-        {/* Empty state */}
-        {filteredMenu.length === 0 && (
-          <div className="no-items-v2">
-            <div className="no-items-icon-v2">🍽️</div>
-            <h3>No items found</h3>
-            <p>
-              {searchTerm 
-                ? `Nothing matches "${searchTerm}"` 
-                : 'Try selecting a different category'}
-            </p>
-            {searchTerm && (
-              <button 
-                className="clear-search-btn"
-                onClick={() => setSearchTerm('')}
-              >
-                Clear Search
-              </button>
+        {filtered.length === 0 && (
+          <div className="menu-empty">
+            <span>🍽️</span>
+            <h3>Nothing matches</h3>
+            <p>Try a different category or search term.</p>
+            {search && (
+              <button className="btn-ghost-warm" onClick={() => setSearch('')}>Clear search</button>
             )}
           </div>
         )}

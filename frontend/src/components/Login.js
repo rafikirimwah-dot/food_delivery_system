@@ -1,38 +1,85 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { apiRequest, saveSession } from '../api';
+import { FaEnvelope, FaLock, FaArrowRight } from 'react-icons/fa';
+import axios from 'axios';
+import { useToast } from './ToastContext';
+import './Login.css';
 
 function Login() {
-  const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { showToast } = useToast();
 
-  const submit = async (event) => {
-    event.preventDefault();
-    setBusy(true);
-    setError('');
+  const submit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     try {
-      const data = await apiRequest('/login', { method: 'POST', body: JSON.stringify(form) });
-      saveSession(data);
-      window.dispatchEvent(new Event('auth-changed'));
-
-      const role = data?.user?.role;
+      const res = await axios.post('http://localhost:5000/api/login', form);
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      showToast(`Welcome back, ${res.data.user.name.split(' ')[0]}!`, 'success');
+      const role = res.data.user.role;
       if (role === 'admin') navigate('/admin');
       else if (role === 'manager') navigate('/manager');
       else navigate('/');
+      window.location.reload();
     } catch (err) {
-      setError(err.message);
+      showToast(err.response?.data?.message || 'Login failed', 'error');
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   };
 
-  return <main className="page narrow-page"><section className="form-card"><p className="eyebrow">Welcome back</p><h1>Sign in to your table.</h1><p className="muted">Track orders, save favorites, and get dinner moving.</p><form onSubmit={submit}>
-    <label>Email<input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
-    <label>Password<input type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
-    {error && <p className="error">{error}</p>}<button className="button primary" disabled={busy}>{busy ? 'Signing in...' : 'Sign in'}</button>
-  </form><p className="form-footer">New here? <Link to="/register">Create an account</Link></p></section></main>;
+  return (
+    <div className="auth-page-warm">
+      <div className="auth-card-warm">
+        <div className="auth-brand-warm">
+          <div className="auth-mark-warm">🍽️</div>
+          <h1>Welcome back</h1>
+          <p>Sign in to continue ordering delicious food.</p>
+        </div>
+
+        <form onSubmit={submit} className="auth-form-warm">
+          <div className="af-warm">
+            <label>Email address</label>
+            <div className="af-input-warm">
+              <FaEnvelope />
+              <input
+                type="email"
+                value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="af-warm">
+            <label>Password</label>
+            <div className="af-input-warm">
+              <FaLock />
+              <input
+                type="password"
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder="••••••••"
+                required
+              />
+            </div>
+          </div>
+
+          <button type="submit" className="btn-primary-warm auth-submit-warm" disabled={loading}>
+            {loading ? 'Signing in…' : <>Sign In <FaArrowRight /></>}
+          </button>
+        </form>
+
+        <p className="auth-switch-warm">
+          New to FoodExpress? <Link to="/register">Create an account</Link>
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export default Login;
