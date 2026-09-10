@@ -553,4 +553,112 @@ app.get('/api/hotels/featured', (req, res) => {
         }
         res.json(results);
     });
+    // ========== NEW: Nearby Hotels ==========
+app.get('/api/hotels/nearby', (req, res) => {
+    const { lat, lng, maxDistance = 10 } = req.query;
+    
+    if (!lat || !lng) {
+        return res.status(400).json({ message: 'Latitude and longitude required' });
+    }
+
+    const query = `
+        SELECT *,
+        (6371 * acos(
+            cos(radians(?)) * cos(radians(latitude)) *
+            cos(radians(longitude) - radians(?)) +
+            sin(radians(?)) * sin(radians(latitude))
+        )) AS distance_km
+        FROM hotels
+        WHERE is_active = TRUE
+        HAVING distance_km <= ?
+        ORDER BY distance_km ASC
+    `;
+    
+    db.query(query, [lat, lng, lat, maxDistance], (err, results) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ message: 'Database error' });
+        }
+        res.json(results);
+    });
+});
+
+// ========== NEW: Budget Filter ==========
+app.get('/api/hotels/budget/:range', (req, res) => {
+    const ranges = {
+        'budget': [0, 700],
+        'mid': [700, 1500],
+        'premium': [1500, 3000],
+        'luxury': [3000, 100000]
+    };
+    
+    const range = ranges[req.params.range];
+    if (!range) return res.status(400).json({ message: 'Invalid budget range' });
+    
+    const query = `
+        SELECT h.*, 
+               MIN(fi.price) as min_price,
+               COUNT(fi.id) as item_count
+        FROM hotels h
+        JOIN food_items fi ON h.id = fi.hotel_id
+        WHERE fi.price BETWEEN ? AND ? AND fi.is_available = TRUE
+        GROUP BY h.id
+        HAVING item_count > 0
+        ORDER BY min_price ASC
+    `;
+    
+    db.query(query, [range[0], range[1]], (err, results) => {
+        if (err) return res.status(500).json({ message: 'Database error' });
+        res.json(results);
+    });
+});
+
+// ========== NEW: Order Tracking ==========
+app.get('/api/orders/:id/track', authenticate, (req, res) => {
+    const orderId = req.params.id;
+    
+    const query = `
+        SELECT o.*, 
+               h.name as hotel_name, h.latitude as hotel_lat, h.longitude as hotel_lng,
+               h.brand_color as hotel_color, h.emoji as hotel_emoji,
+               u.name as customer_name
+        FROM orders o
+        JOIN hotels h ON o.hotel_id = h.id
+        JOIN users u ON o.user_id = u.id
+        WHERE o.id = ?
+    `;
+    
+    db.query(query, [orderId], (err, results) => {
+        if (err || results.length === 0) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+        
+        const order = results[0];
+        
+        // Simulate delivery person position based on order status
+        const deliveryProgress = {
+            'pending': 0,
+            'confirmed': 0.1,
+            'preparing': 0.3,
+            'ready': 0.5,
+            'delivered': 0.8,
+            'completed': 1.0
+        }[order.status] || 0;
+        
+        // Simulate delivery person moving from hotel to customer
+        const deliveryLat = order.hotel_lat + (order.delivery_lat - order.hotel_lat) * deliveryProgress;
+        const deliveryLng = order.hotel_lng + (order.delivery_lng - order.hotel_lng) * deliveryProgress;
+        
+        res.json({
+            ...order,
+            delivery_person: {
+                name: 'James Mwangi',
+                phone: '+254712345678',
+                lat: deliveryLat || order.hotel_lat,
+                lng: deliveryLng || order.hotel_lng,
+                progress: deliveryProgress
+            }
+        });
+    });
+});
 });
