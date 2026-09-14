@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const https = require('https');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -198,7 +199,43 @@ db.query('SELECT 1', async (err) => {
 });
 
 // JWT Secret
-const JWT_SECRET = 'your_jwt_secret_key_here';
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || 'no-reply@fooddelivery.local';
+
+async function sendAppEmail({ to, subject, text, html }) {
+    if (!SMTP_USER || !SMTP_PASS) {
+        console.warn('SMTP credentials are not configured; skipping email send.');
+        return { ok: false, reason: 'SMTP not configured' };
+    }
+
+    const transporter = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: false,
+        auth: {
+            user: SMTP_USER,
+            pass: SMTP_PASS
+        }
+    });
+
+    try {
+        await transporter.sendMail({
+            from: SMTP_FROM,
+            to,
+            subject,
+            text,
+            html
+        });
+        return { ok: true };
+    } catch (error) {
+        console.error('Failed to send email:', error.message);
+        return { ok: false, reason: error.message };
+    }
+}
 
 // Authentication middleware
 const authenticate = (req, res, next) => {
@@ -236,23 +273,31 @@ app.post('/api/register', async (req, res) => {
         const query = 'INSERT INTO users (name, email, password, role, is_approved) VALUES (?, ?, ?, ?, ?)';
         const isApproved = role === 'admin' ? true : false;
         
-        db.query(query, [name, email, hashedPassword, role, isApproved], (err, result) => {
+        db.query(query, [name, email, hashedPassword, role, isApproved], async (err, result) => {
             if (err) {
                 return res.status(400).json({ message: 'Email already exists' });
             }
-            
+
             if (role === 'manager') {
                 const requestedHotel = hotelName || 'New Hotel';
                 const existingHotelQuery = 'SELECT id FROM hotels WHERE name = ? AND manager_id IS NULL LIMIT 1';
-                db.query(existingHotelQuery, [requestedHotel], (hotelLookupError, hotels) => {
+                db.query(existingHotelQuery, [requestedHotel], async (hotelLookupError, hotels) => {
                     if (hotelLookupError) {
                         return res.status(500).json({ message: 'Failed to assign hotel' });
                     }
 
-                    const finishRegistration = (hotelError) => {
+                    const finishRegistration = async (hotelError) => {
                         if (hotelError) {
                             return res.status(400).json({ message: 'Failed to assign hotel' });
                         }
+
+                        await sendAppEmail({
+                            to: email,
+                            subject: 'Your manager account is pending approval',
+                            text: `Hello ${name},\n\nYour manager account has been created and is awaiting admin approval. Once approved, you can log in and manage your hotel menu.`,
+                            html: `<p>Hello ${name},</p><p>Your manager account has been created and is awaiting admin approval. Once approved, you can log in and manage your hotel menu.</p>`
+                        });
+
                         res.status(201).json({ message: 'Manager registered, awaiting admin approval' });
                     };
 
@@ -263,6 +308,12 @@ app.post('/api/register', async (req, res) => {
                     }
                 });
             } else {
+                await sendAppEmail({
+                    to: email,
+                    subject: 'Welcome to the food delivery app',
+                    text: `Hello ${name},\n\nYour account has been created successfully. You can now log in and start using the platform.`,
+                    html: `<p>Hello ${name},</p><p>Your account has been created successfully. You can now log in and start using the platform.</p>`
+                });
                 res.status(201).json({ message: 'User registered successfully' });
             }
         });
@@ -322,10 +373,25 @@ app.get('/api/admin/pending-managers', authenticate, authorize('admin'), (req, r
 // Approve manager
 app.put('/api/admin/approve-manager/:id', authenticate, authorize('admin'), (req, res) => {
     const managerId = req.params.id;
-    
-    db.query('UPDATE users SET is_approved = TRUE WHERE id = ? AND role = "manager"', [managerId], (err) => {
+
+    db.query('SELECT name, email FROM users WHERE id = ? AND role = "manager"', [managerId], async (err, results) => {
         if (err) return res.status(500).json({ message: 'Database error' });
-        res.json({ message: 'Manager approved successfully' });
+        if (!results.length) return res.status(404).json({ message: 'Manager not found' });
+
+        const manager = results[0];
+
+        db.query('UPDATE users SET is_approved = TRUE WHERE id = ? AND role = "manager"', [managerId], async (updateErr) => {
+            if (updateErr) return res.status(500).json({ message: 'Database error' });
+
+            await sendAppEmail({
+                to: manager.email,
+                subject: 'Your manager account has been approved',
+                text: `Hello ${manager.name},\n\nYour manager account has been approved. You can now log in and manage your hotel.`,
+                html: `<p>Hello ${manager.name},</p><p>Your manager account has been approved. You can now log in and manage your hotel.</p>`
+            });
+
+            res.json({ message: 'Manager approved successfully' });
+        });
     });
 });
 
