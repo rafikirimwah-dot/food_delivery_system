@@ -624,10 +624,17 @@ app.get('/api/manager/earnings', authenticate, authorize('manager'), (req, res) 
 
 // Get all hotels
 app.get('/api/hotels', (req, res) => {
-    db.query('SELECT * FROM hotels WHERE is_active = TRUE', (err, results) => {
-        if (err) return res.status(500).json({ message: 'Database error' });
-        res.json(results);
-    });
+  const query = `
+    SELECT h.*,
+      COALESCE((SELECT MIN(fi.price) FROM food_items fi WHERE fi.hotel_id = h.id AND fi.is_available = TRUE), 0) AS min_dish_price,
+      COALESCE((SELECT MAX(fi.price) FROM food_items fi WHERE fi.hotel_id = h.id AND fi.is_available = TRUE), 0) AS max_dish_price
+    FROM hotels h
+    WHERE h.is_active = TRUE
+  `;
+  db.query(query, (err, results) => {
+    if (err) return res.status(500).json({ message: 'Database error' });
+    res.json(results);
+  });
 });
 
 // Get hotel details with menu
@@ -1677,6 +1684,264 @@ app.post('/api/manager/menu/generate-description', authenticate, authorize('mana
     console.error('OpenAI error:', err.message);
     res.status(500).json({ message: 'Failed to generate description' });
   }
+});
+// ============================================
+// FAVORITES
+// ============================================
+
+// Get user's favorites
+app.get('/api/users/favorites', authenticate, (req, res) => {
+  db.query(
+    `SELECT h.*, f.created_at AS favorited_at
+     FROM favorites f
+     JOIN hotels h ON f.hotel_id = h.id
+     WHERE f.user_id = ?
+     ORDER BY f.created_at DESC`,
+    [req.user.id],
+    (err, results) => {
+      if (err) return res.status(500).json({ message: 'Database error' });
+      res.json(results);
+    }
+  );
+});
+
+// Get user's favorite hotel IDs (for quick lookup)
+app.get('/api/users/favorites/ids', authenticate, (req, res) => {
+  db.query(
+    'SELECT hotel_id FROM favorites WHERE user_id = ?',
+    [req.user.id],
+    (err, results) => {
+      if (err) return res.status(500).json({ message: 'Database error' });
+      res.json(results.map(r => r.hotel_id));
+    }
+  );
+});
+
+// Toggle favorite
+app.post('/api/favorites/:hotelId/toggle', authenticate, (req, res) => {
+  const hotelId = req.params.hotelId;
+  const userId = req.user.id;
+
+  db.query(
+    'SELECT id FROM favorites WHERE user_id = ? AND hotel_id = ?',
+    [userId, hotelId],
+    (err, results) => {
+      if (err) return res.status(500).json({ message: 'Database error' });
+
+      if (results.length > 0) {
+        db.query(
+          'DELETE FROM favorites WHERE user_id = ? AND hotel_id = ?',
+          [userId, hotelId],
+          (err) => {
+            if (err) return res.status(500).json({ message: 'Database error' });
+            res.json({ favorited: false });
+          }
+        );
+      } else {
+        db.query(
+          'INSERT INTO favorites (user_id, hotel_id) VALUES (?, ?)',
+          [userId, hotelId],
+          (err) => {
+            if (err) return res.status(500).json({ message: 'Database error' });
+            res.json({ favorited: true });
+          }
+        );
+      }
+    }
+  );
+});
+
+// ============================================
+// HERO FEATURED HOTELS (top 3 for carousel)
+// ============================================
+
+app.get('/api/hotels/hero-featured', (req, res) => {
+  const query = `
+    SELECT h.*,
+           COUNT(o.id) AS order_count,
+           COALESCE(AVG(r.rating), h.rating) AS effective_rating
+    FROM hotels h
+    LEFT JOIN orders o ON h.id = o.hotel_id AND o.status = 'completed'
+    LEFT JOIN ratings r ON h.id = r.hotel_id AND r.is_visible = TRUE
+    WHERE h.is_active = TRUE
+    GROUP BY h.id
+    ORDER BY order_count DESC, effective_rating DESC
+    LIMIT 3
+  `;
+  db.query(query, (err, results) => {
+    if (err) return res.status(500).json({ message: 'Database error' });
+    res.json(results);
+  });
+});
+// ============================================
+// HOTELS — SMART SEARCH + PRICE FILTERING
+// ============================================
+
+app.get('/api/hotels/search', (req, res) => {
+  const {
+    q = '',              // search query
+    cuisine = '',        // cuisine filter
+    minPrice,            // price range min
+    maxPrice,            // price range max
+    minRating,           // min rating
+    openNow,             // 'true' | 'false'
+    sort = 'recommended' // recommended | rating | fastest | cheapest | nearest
+  } = req.query;
+
+  const searchTerm = q.trim().toLowerCase();
+  const params = [];
+
+  // Base query — hotels + aggregated stats + matched dish info
+  let query = `
+    SELECT 
+      h.*,
+      COALESCE((SELECT COUNT(*) FROM orders o WHERE o.hotel_id = h.id AND o.status = 'completed'), 0) AS order_count,
+      COALESCE((SELECT AVG(r.rating) FROM ratings r WHERE r.hotel_id = h.id AND r.is_visible = TRUE), h.rating, 0) AS effective_rating,
+      COALESCE((SELECT MIN(fi.price) FROM food_items fi WHERE fi.hotel_id = h.id AND fi.is_available = TRUE), 0) AS min_dish_price,
+      COALESCE((SELECT MAX(fi.price) FROM food_items fi WHERE fi.hotel_id = h.id AND fi.is_available = TRUE), 0) AS max_dish_price
+    FROM hotels h
+    WHERE h.is_active = TRUE
+  `;
+
+  // Price filtering — based on actual dish prices
+  if (minPrice !== undefined && maxPrice !== undefined) {
+    query += ` AND EXISTS (
+      SELECT 1 FROM food_items fi
+      WHERE fi.hotel_id = h.id 
+        AND fi.is_available = TRUE
+        AND fi.price BETWEEN ? AND ?
+    )`;
+    params.push(parseFloat(minPrice), parseFloat(maxPrice));
+  }
+
+  // Cuisine filter
+  if (cuisine && cuisine !== 'all') {
+    query += ` AND (
+      LOWER(h.cuisine_type) LIKE ? 
+      OR LOWER(h.specialties) LIKE ?
+      OR LOWER(h.description) LIKE ?
+    )`;
+    const like = `%${cuisine.toLowerCase()}%`;
+    params.push(like, like, like);
+  }
+
+  // Rating filter
+  if (minRating) {
+    query += ` AND COALESCE(h.rating, 0) >= ?`;
+    params.push(parseFloat(minRating));
+  }
+
+  // Search — matches hotel name, cuisine, tagline, specialty, OR dish name
+  let matchedDishes = {};
+  if (searchTerm) {
+    const like = `%${searchTerm}%`;
+    query += ` AND (
+      LOWER(h.name) LIKE ?
+      OR LOWER(h.cuisine_type) LIKE ?
+      OR LOWER(h.tagline) LIKE ?
+      OR LOWER(h.specialties) LIKE ?
+      OR LOWER(h.description) LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM food_items fi
+        WHERE fi.hotel_id = h.id
+          AND fi.is_available = TRUE
+          AND (LOWER(fi.name) LIKE ? OR LOWER(fi.description) LIKE ? OR LOWER(fi.category) LIKE ?)
+      )
+    )`;
+    params.push(like, like, like, like, like, like, like, like);
+  }
+
+  // Sort
+  switch (sort) {
+    case 'rating':
+      query += ` ORDER BY effective_rating DESC, order_count DESC`;
+      break;
+    case 'fastest':
+      query += ` ORDER BY h.delivery_time_min ASC`;
+      break;
+    case 'cheapest':
+      query += ` ORDER BY min_dish_price ASC`;
+      break;
+    case 'nearest':
+      // Handled client-side
+      query += ` ORDER BY h.rating DESC`;
+      break;
+    default:
+      query += ` ORDER BY effective_rating DESC, order_count DESC`;
+  }
+
+  db.query(query, params, (err, hotels) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Database error' });
+    }
+
+    if (hotels.length === 0) {
+      return res.json({ hotels: [] });
+    }
+
+    // If searching by text, also fetch matching dishes per hotel
+    if (searchTerm) {
+      const hotelIds = hotels.map(h => h.id);
+      const placeholders = hotelIds.map(() => '?').join(',');
+      const like = `%${searchTerm}%`;
+
+      const dishesQuery = `
+        SELECT id, hotel_id, name, price, category, image_url, 
+               is_on_offer, discount_percent
+        FROM food_items
+        WHERE hotel_id IN (${placeholders})
+          AND is_available = TRUE
+          AND (LOWER(name) LIKE ? OR LOWER(category) LIKE ? OR LOWER(description) LIKE ?)
+        ORDER BY price ASC
+      `;
+
+      db.query(dishesQuery, [...hotelIds, like, like, like], (err, dishes) => {
+        if (err) {
+          console.error(err);
+          return res.json({ hotels });
+        }
+
+        // Group dishes by hotel
+        dishes.forEach(d => {
+          if (!matchedDishes[d.hotel_id]) matchedDishes[d.hotel_id] = [];
+          matchedDishes[d.hotel_id].push(d);
+        });
+
+        const enriched = hotels.map(h => ({
+          ...h,
+          matched_dishes: matchedDishes[h.id] || []
+        }));
+
+        res.json({ hotels: enriched });
+      });
+    } else {
+      // No search — still return top dishes per hotel for previews
+      const hotelIds = hotels.map(h => h.id);
+      const placeholders = hotelIds.map(() => '?').join(',');
+
+      const dishesQuery = `
+        SELECT id, hotel_id, name, price, category, image_url,
+               is_on_offer, discount_percent
+        FROM food_items
+        WHERE hotel_id IN (${placeholders}) AND is_available = TRUE
+        ORDER BY price ASC
+      `;
+
+      db.query(dishesQuery, hotelIds, (err, dishes) => {
+        if (err) return res.json({ hotels });
+        dishes.forEach(d => {
+          if (!matchedDishes[d.hotel_id]) matchedDishes[d.hotel_id] = [];
+          matchedDishes[d.hotel_id].push(d);
+        });
+        const enriched = hotels.map(h => ({
+          ...h,
+          matched_dishes: matchedDishes[h.id] || []
+        }));
+        res.json({ hotels: enriched });
+      });
+    }
+  });
 });
     });
   });
