@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { FaArrowLeft, FaMotorcycle, FaPhone, FaCheckCircle, FaClock } from 'react-icons/fa';
+import { FaArrowLeft, FaPhone, FaCheckCircle, FaClock } from 'react-icons/fa';
 import axios from 'axios';
 import './OrderTracking.css';
 

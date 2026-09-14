@@ -1,0 +1,35 @@
+.skeleton-box {
+  background: linear-gradient(90deg, var(--cream-2) 25%, var(--cream-3) 50%, var(--cream-2) 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+.skeleton-hotel-card,
+.skeleton-menu-card {
+  background: var(--white);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-2xl);
+  overflow: hidden;
+}
+
+.skeleton-order-card {
+  background: var(--white);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-xl);
+  padding: 1.5rem;
+}
+
+.skeleton-stat-card {
+  background: var(--white);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-2xl);
+  padding: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}

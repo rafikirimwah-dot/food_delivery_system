@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FaUtensils, FaShoppingBag, FaMoneyBillWave, FaPlus, FaEdit,
   FaTrash, FaTimes, FaCheck, FaChartLine, FaFire, FaClock, FaStar
@@ -16,15 +16,13 @@ function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', price: '', category: 'Main', is_available: true });
   const { showToast } = useToast();
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   const formatKSh = (n) => `KSh ${Math.round(parseFloat(n || 0)).toLocaleString()}`;
 
-  useEffect(() => { fetchAll(); }, []);
-
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
@@ -43,16 +41,20 @@ function ManagerDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const openAdd = () => {
     setEditing(null);
+    setImageFile(null);
     setForm({ name: '', description: '', price: '', category: 'Main', is_available: true });
     setModal(true);
   };
 
   const openEdit = (item) => {
     setEditing(item);
+    setImageFile(null);
     setForm({
       name: item.name,
       description: item.description || '',
@@ -67,15 +69,27 @@ function ManagerDashboard() {
     if (!form.name.trim() || !form.price) return showToast('Name and price required', 'warning');
     try {
       const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
+      const fd = new FormData();
+      fd.append('name', form.name);
+      fd.append('description', form.description || '');
+      fd.append('price', form.price);
+      fd.append('category', form.category);
+      fd.append('is_available', String(form.is_available));
+      if (imageFile) fd.append('image', imageFile);
+
       if (editing) {
-        await axios.put(`http://localhost:5000/api/manager/menu/${editing.id}`, form, { headers });
+        await axios.put(`http://localhost:5000/api/manager/menu/${editing.id}`, fd, {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+        });
         showToast('Item updated', 'success');
       } else {
-        await axios.post('http://localhost:5000/api/manager/menu', form, { headers });
+        await axios.post('http://localhost:5000/api/manager/menu', fd, {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+        });
         showToast('Item added', 'success');
       }
       setModal(false);
+      setImageFile(null);
       fetchAll();
     } catch { showToast('Failed to save', 'error'); }
   };
@@ -405,6 +419,19 @@ function ManagerDashboard() {
                     <option>Chicken</option><option>Pasta</option><option>Sushi</option>
                   </select>
                 </div>
+              </div>
+              <div className="mf-warm">
+                <label>Menu photo</label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                />
+                {editing?.image_url && !imageFile && (
+                  <div className="mf-preview-warm">
+                    <img src={editing.image_url} alt={editing.name} />
+                  </div>
+                )}
               </div>
               <label className="mf-check-warm">
                 <input type="checkbox" checked={form.is_available} onChange={e => setForm({ ...form, is_available: e.target.checked })} />

@@ -1,63 +1,40 @@
+/* frontend/src/App.css */
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  /* ---- Warm Palette ---- */
   --cream: #FAF7F2;
   --cream-2: #F5EFE6;
   --cream-3: #EFE7DA;
   --white: #FFFFFF;
-
   --terracotta: #C97B5F;
   --terracotta-dark: #A85F44;
   --terracotta-soft: #E8C4B2;
   --terracotta-tint: #F5E4DA;
-
   --sage: #8FA68E;
   --sage-dark: #6F8A6D;
   --sage-tint: #E4EBE0;
-
   --rose: #D4A5A5;
   --rose-dark: #B98888;
   --rose-tint: #F5E4E4;
-
   --gold: #C9A961;
   --gold-tint: #F5EDD8;
-
   --charcoal: #2D2A26;
   --charcoal-soft: #4A453E;
   --muted: #7A736A;
   --muted-light: #A59E94;
-
   --border: #E8DFD3;
   --border-soft: #F0E9DE;
-
-  /* ---- Shadows (all warm brown-tinted) ---- */
   --shadow-sm: 0 1px 3px rgba(201, 123, 95, 0.06), 0 1px 2px rgba(201, 123, 95, 0.04);
   --shadow-md: 0 4px 16px rgba(201, 123, 95, 0.08), 0 2px 6px rgba(201, 123, 95, 0.05);
   --shadow-lg: 0 12px 32px rgba(201, 123, 95, 0.12), 0 4px 12px rgba(201, 123, 95, 0.06);
   --shadow-xl: 0 24px 60px rgba(201, 123, 95, 0.14), 0 8px 20px rgba(201, 123, 95, 0.08);
-
-  /* ---- Glass (warm tinted) ---- */
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-border: rgba(255, 255, 255, 0.8);
-
-  /* ---- Motion ---- */
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* ---- Radii ---- */
-  --r-sm: 12px;
-  --r-md: 16px;
-  --r-lg: 20px;
-  --r-xl: 24px;
-  --r-2xl: 32px;
-  --r-pill: 999px;
+  --r-sm: 12px; --r-md: 16px; --r-lg: 20px; --r-xl: 24px; --r-2xl: 32px; --r-pill: 999px;
 }
 
 html, body {
@@ -71,7 +48,6 @@ html, body {
   overflow-x: hidden;
 }
 
-/* Subtle warm gradient overlay */
 body::before {
   content: '';
   position: fixed;
@@ -84,11 +60,7 @@ body::before {
     radial-gradient(circle at 50% 50%, rgba(250, 247, 242, 0.6) 0%, transparent 70%);
 }
 
-#root, .App {
-  min-height: 100vh;
-  position: relative;
-  z-index: 1;
-}
+#root, .App { min-height: 100vh; position: relative; z-index: 1; }
 
 h1, h2, h3, h4, h5 {
   font-family: 'Fraunces', 'Playfair Display', Georgia, serif;
@@ -103,21 +75,12 @@ h2 { font-size: clamp(1.4rem, 2.2vw, 1.9rem); }
 h3 { font-size: clamp(1.1rem, 1.5vw, 1.35rem); }
 
 p { color: var(--charcoal-soft); line-height: 1.65; }
-
 a { color: var(--terracotta); text-decoration: none; transition: color 200ms var(--ease-soft); }
 a:hover { color: var(--terracotta-dark); }
 
-button, input, textarea, select {
-  font-family: inherit;
-  color: inherit;
-}
+button, input, textarea, select { font-family: inherit; color: inherit; }
 
-.main-content {
-  padding-top: 88px;
-  min-height: calc(100vh - 88px);
-}
-
-/* ---- Utility Classes ---- */
+.main-content { padding-top: 88px; min-height: calc(100vh - 88px); }
 
 .warm-card {
   background: var(--white);
@@ -127,10 +90,7 @@ button, input, textarea, select {
   transition: transform 320ms var(--ease), box-shadow 320ms var(--ease);
 }
 
-.warm-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-}
+.warm-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
 
 .glass-card {
   background: var(--glass-bg);
@@ -187,8 +147,6 @@ button, input, textarea, select {
   background: var(--terracotta-tint);
 }
 
-/* ---- Loading ---- */
-
 .loading-container {
   display: flex;
   flex-direction: column;
@@ -208,31 +166,27 @@ button, input, textarea, select {
   animation: spin 900ms linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ---- Animations ---- */
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.8; }
+}
+
 .slide-up { animation: slideUp 500ms var(--ease) both; }
 .fade-in { animation: fadeIn 400ms var(--ease) both; }
-
-/* ---- Scrollbar ---- */
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--cream-2); }

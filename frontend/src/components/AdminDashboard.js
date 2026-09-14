@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  FaUsers, FaStore, FaShoppingBag, FaMoneyBillWave, FaChartLine,
+  FaStore, FaShoppingBag, FaMoneyBillWave, FaChartLine,
   FaCheckCircle, FaClock, FaTrophy, FaFire
 } from 'react-icons/fa';
 import axios from 'axios';
@@ -18,9 +18,7 @@ function AdminDashboard() {
 
   const formatKSh = (n) => `KSh ${Math.round(parseFloat(n || 0)).toLocaleString()}`;
 
-  useEffect(() => { fetchAll(); }, []);
-
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
@@ -37,7 +35,9 @@ function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const approve = async (id, name) => {
     try {
@@ -48,6 +48,37 @@ function AdminDashboard() {
       showToast(`${name} approved ✅`, 'success');
       fetchAll();
     } catch { showToast('Failed to approve', 'error'); }
+  };
+
+  const toggleHotelStatus = async (hotelId, currentStatus, hotelName) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `http://localhost:5000/api/admin/hotels/${hotelId}/status`,
+        { is_active: !currentStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      showToast(`${hotelName} ${!currentStatus ? 'activated' : 'deactivated'} successfully`, 'success');
+      fetchAll();
+    } catch {
+      showToast('Failed to update hotel status', 'error');
+    }
+  };
+
+  const deleteHotel = async (hotelId, hotelName) => {
+    const confirmed = window.confirm(`Delete hotel "${hotelName}"? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:5000/api/admin/hotels/${hotelId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showToast(`${hotelName} deleted`, 'success');
+      fetchAll();
+    } catch {
+      showToast('Failed to delete hotel', 'error');
+    }
   };
 
   const completed = orders.filter(o => o.status === 'completed');
@@ -237,10 +268,13 @@ function AdminDashboard() {
             <div className="hotel-admin-warm" key={h.id}>
               <div className="hac-head-warm" style={{ background: `linear-gradient(135deg, ${h.brand_color}30 0%, ${h.brand_color}10 100%)` }}>
                 <span className="hac-emoji-warm">{h.emoji || '🍽️'}</span>
-                <span className="hac-status-warm">
-                  {h.is_active ? <><FaCheckCircle /> Active</> : 'Inactive'}
+                <span className={`hac-status-warm ${h.is_active ? 'active' : 'inactive'}`}>
+                  {h.is_active ? <><FaCheckCircle /> Active</> : '⚠ Inactive'}
                 </span>
               </div>
+              {!h.is_active && (
+                <div className="hotel-warning-badge-warm">Deactivated by admin</div>
+              )}
               <div className="hac-body-warm">
                 <h3>{h.name}</h3>
                 <p className="hac-cuisine-warm" style={{ color: h.brand_color }}>{h.cuisine_type}</p>
@@ -254,6 +288,20 @@ function AdminDashboard() {
                     <div className="hac-val">⭐ {h.rating || 'N/A'}</div>
                     <div className="hac-lbl">Rating</div>
                   </div>
+                </div>
+                <div className="hotel-admin-actions-warm">
+                  <button
+                    className="btn-ghost-warm"
+                    onClick={() => toggleHotelStatus(h.id, h.is_active, h.name)}
+                  >
+                    {h.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button
+                    className="btn-danger-warm"
+                    onClick={() => deleteHotel(h.id, h.name)}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>

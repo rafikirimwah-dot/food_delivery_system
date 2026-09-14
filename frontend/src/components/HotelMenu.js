@@ -1,13 +1,42 @@
+// frontend/src/components/HotelMenu.js
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   FaStar, FaPlus, FaMinus, FaShoppingCart, FaArrowLeft,
-  FaClock, FaMotorcycle, FaMapMarkerAlt, FaSearch, FaFire
+  FaClock, FaMotorcycle, FaSearch, FaFire
 } from 'react-icons/fa';
 import axios from 'axios';
 import { CartContext } from '../context/CartContext';
 import { useToast } from './ToastContext';
+import LazyImage from './LazyImage';
+import ReviewsList from './ReviewsList';
 import './HotelMenu.css';
+
+const CATEGORY_ICONS = {
+  pizza: '🍕', burgers: '🍔', burger: '🍔',
+  chicken: '🍗', pasta: '🍝', sushi: '🍣',
+  sides: '🍟', fries: '🍟', salads: '🥗', salad: '🥗',
+  soups: '🍲', soup: '🍲', desserts: '🍰', dessert: '🍰',
+  beverages: '🥤', drinks: '🥤', wraps: '🌯', wrap: '🌯',
+  sandwiches: '🥪', appetizers: '🥟', main: '🍽️'
+};
+
+const DIET_TAGS = [
+  { id: 'vegetarian', label: '🥗 Vegetarian', color: '#8FA68E' },
+  { id: 'vegan', label: '🌱 Vegan', color: '#00B248' },
+  { id: 'halal', label: '☪️ Halal', color: '#4CAF50' },
+  { id: 'spicy', label: '🌶️ Spicy', color: '#E53935' },
+  { id: 'gluten-free', label: '🌾 Gluten-free', color: '#FFB800' },
+  { id: 'contains-nuts', label: '🥜 Nuts', color: '#8D6E63' },
+  { id: 'contains-dairy', label: '🥛 Dairy', color: '#64B5F6' },
+  { id: 'contains-eggs', label: '🥚 Eggs', color: '#FFD54F' },
+  { id: 'contains-seafood', label: '🦐 Seafood', color: '#26A69A' },
+  { id: 'new', label: '✨ New', color: '#9D4EDD' },
+  { id: 'popular', label: '🔥 Popular', color: '#FF3D68' },
+  { id: 'chef', label: "👨‍🍳 Chef's pick", color: '#C9A961' }
+];
+
+const getCategoryIcon = (c) => CATEGORY_ICONS[(c || '').toLowerCase().trim()] || '🍽️';
 
 function HotelMenu() {
   const { id } = useParams();
@@ -64,9 +93,7 @@ function HotelMenu() {
   }, [selectedCategory, search, menu]);
 
   const categories = ['All', ...new Set(menu.map(i => i.category))];
-
   const formatKSh = (n) => `KSh ${Math.round(parseFloat(n)).toLocaleString()}`;
-
   const finalPrice = (item) => item.is_on_offer && item.discount_percent > 0
     ? item.price * (1 - item.discount_percent / 100)
     : item.price;
@@ -94,47 +121,110 @@ function HotelMenu() {
   };
 
   const imgError = (id) => setImageErrors(p => ({ ...p, [id]: true }));
+  const imgSrc = (item) => imageErrors[item.id] ? null : item.image_url;
 
-  const imgSrc = (item) => imageErrors[item.id]
-    ? `https://via.placeholder.com/500x360/F5EFE6/C97B5F?text=${encodeURIComponent(item.name)}`
-    : item.image_url;
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner" />
+        <p>Loading menu…</p>
+      </div>
+    );
+  }
 
-  if (loading) return <div className="loading-container"><div className="spinner" /><p>Loading menu…</p></div>;
-
-  if (!hotel) return (
-    <div className="loading-container">
-      <h2>Restaurant not found</h2>
-      <Link to="/hotels" className="btn-primary-warm">Back to Restaurants</Link>
-    </div>
-  );
+  if (!hotel) {
+    return (
+      <div className="loading-container">
+        <h2>Restaurant not found</h2>
+        <Link to="/hotels" className="btn-primary-warm">Back to Restaurants</Link>
+      </div>
+    );
+  }
 
   const hotelColor = hotel.brand_color || '#C97B5F';
 
   return (
     <div className="hotel-page-warm" style={{ '--hotel-color': hotelColor }}>
-      {/* HEADER */}
-      <div className="hotel-hero-warm">
-        <div className="hotel-hero-bg-emoji">{hotel.emoji || '🍽️'}</div>
-        <div className="hotel-hero-inner">
+      {/* HERO */}
+      <div className="hotel-hero-v2">
+        <div
+          className="hh-bg"
+          style={{
+            backgroundImage: `url(${hotel.hero_image_url || `https://picsum.photos/seed/hotel${hotel.id}/1600/600`})`
+          }}
+        >
+          <div
+            className="hh-overlay"
+            style={{
+              background: `linear-gradient(135deg, ${hotelColor}DD 0%, ${hotelColor}99 50%, ${hotelColor}CC 100%)`
+            }}
+          ></div>
+        </div>
+
+        <div className="hh-inner">
           <Link to="/hotels" className="back-btn-warm">
-            <FaArrowLeft /> Back to Restaurants
+            <FaArrowLeft /> Back
           </Link>
 
-          <div className="hotel-hero-content">
-            <div className="hotel-hero-emoji">{hotel.emoji || '🍽️'}</div>
-            <div className="hotel-hero-info">
-              <span className="hotel-vibe-tag">{hotel.vibe || 'Signature'}</span>
-              <h1>{hotel.name}</h1>
-              <p className="hotel-hero-desc">{hotel.description}</p>
-              <div className="hotel-chips">
-                <span><FaStar style={{ color: '#C9A961' }} /> {hotel.rating || 'New'}</span>
-                <span><FaMapMarkerAlt /> {hotel.cuisine_type}</span>
-                <span><FaClock /> 20–30 min</span>
-                <span><FaMotorcycle /> Free delivery</span>
+          <div className="hh-content">
+            <div className="hh-left">
+              <div className="hh-emoji-circle">
+                <span>{hotel.emoji || '🍽️'}</span>
+              </div>
+
+              <div className="hh-info">
+                <span className="hh-vibe-pill">{hotel.vibe || 'Signature'}</span>
+                <h1>{hotel.name}</h1>
+                <p className="hh-tagline">{hotel.tagline || hotel.description}</p>
+
+                <div className="hh-chips">
+                  <span>
+                    <FaStar style={{ color: '#FFD700' }} /> {hotel.rating || 'New'} · {hotel.rating_count || 0} reviews
+                  </span>
+                  <span><FaClock /> {hotel.delivery_time_min || 20}–{hotel.delivery_time_max || 40} min</span>
+                  <span><FaMotorcycle /> Free delivery</span>
+                  <span>🕐 {hotel.opening_hours || 'Open'}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* STORY */}
+      <div className="hotel-story-v2">
+        <div className="story-main">
+          <h2>About {hotel.name}</h2>
+          <p className="story-text">{hotel.story || hotel.description}</p>
+
+          {hotel.specialties && (
+            <div className="story-specialties">
+              <span className="specialties-label">Known for:</span>
+              <div className="specialties-chips">
+                {hotel.specialties.split('·').map((s, i) => (
+                  <span key={i} className="spec-chip" style={{
+                    background: `${hotelColor}15`,
+                    color: hotelColor,
+                    borderColor: `${hotelColor}40`
+                  }}>
+                    {s.trim()}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {hotel.signature_dish && (
+          <div className="signature-card" style={{
+            background: `linear-gradient(135deg, ${hotelColor}10, ${hotelColor}05)`,
+            borderColor: `${hotelColor}30`
+          }}>
+            <div className="sig-label">✨ Signature dish</div>
+            <div className="sig-name">{hotel.signature_dish}</div>
+            <div className="sig-sub">Chef's recommendation</div>
+          </div>
+        )}
       </div>
 
       {/* MENU */}
@@ -171,16 +261,32 @@ function HotelMenu() {
           {filtered.map(item => {
             const price = finalPrice(item);
             const hasDiscount = item.is_on_offer && item.discount_percent > 0;
+            const dietTags = (item.diet_tags || '').split(',').filter(Boolean);
+
             return (
               <div className="menu-card-warm" key={item.id}>
                 <div className="mc-img-warm">
-                  <img src={imgSrc(item)} alt={item.name} onError={() => imgError(item.id)} loading="lazy" />
+                  {imgSrc(item) ? (
+                    <LazyImage
+                      src={imgSrc(item)}
+                      alt={item.name}
+                      aspectRatio="16/9"
+                      onError={() => imgError(item.id)}
+                    />
+                  ) : (
+                    <div className="mc-img-placeholder-warm">
+                      <span>{getCategoryIcon(item.category)}</span>
+                      <p>{item.name}</p>
+                    </div>
+                  )}
                   {hasDiscount && (
                     <span className="mc-offer-badge">
                       <FaFire /> -{item.discount_percent}%
                     </span>
                   )}
-                  <span className="mc-cat-badge">{item.category}</span>
+                  <span className="mc-cat-badge">
+                    {getCategoryIcon(item.category)} {item.category}
+                  </span>
                 </div>
 
                 <div className="mc-body-warm">
@@ -188,6 +294,22 @@ function HotelMenu() {
                     <h3>{item.name}</h3>
                   </div>
                   <p className="mc-desc">{item.description || 'A delicious dish, prepared with care.'}</p>
+
+                  {dietTags.length > 0 && (
+                    <div className="mc-diet-tags">
+                      {dietTags.map((tagId, i) => {
+                        const tag = DIET_TAGS.find(t => t.id === tagId.trim());
+                        if (!tag) return null;
+                        return (
+                          <span key={i} className="mc-diet-tag"
+                            style={{ background: `${tag.color}20`, color: tag.color }}>
+                            {tag.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <span className="mc-prep"><FaClock /> {item.preparation_time || 15} min</span>
 
                   <div className="mc-footer-warm">
@@ -248,6 +370,9 @@ function HotelMenu() {
           </div>
         )}
       </div>
+
+      {/* REVIEWS */}
+      <ReviewsList hotelId={hotel.id} />
     </div>
   );
 }

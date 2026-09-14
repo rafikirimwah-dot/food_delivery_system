@@ -1,0 +1,12 @@
+.lang-toggle {
+  display: inline-flex; padding: 0.3rem; gap: 0.2rem;
+  background: var(--cream-2); border: 1px solid var(--border-soft);
+  border-radius: var(--r-pill);
+}
+.lang-btn {
+  padding: 0.35rem 0.7rem; background: transparent; border: none;
+  border-radius: var(--r-pill); color: var(--muted); font-size: 0.72rem;
+  font-weight: 700; cursor: pointer; transition: all 200ms var(--ease-soft);
+  font-family: inherit;
+}
+.lang-btn.active { background: var(--white); color: var(--terracotta); box-shadow: var(--shadow-sm); }

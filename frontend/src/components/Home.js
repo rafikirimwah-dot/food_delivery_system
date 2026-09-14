@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+// frontend/src/components/Home.js
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaStar, FaClock, FaMotorcycle, FaArrowRight, FaMapMarkerAlt } from 'react-icons/fa';
+import {
+  FaStar, FaClock, FaMotorcycle, FaArrowRight, FaMapMarkerAlt,
+  FaFire, FaSearch, FaTimes
+} from 'react-icons/fa';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
+import LazyImage from './LazyImage';
 import './Home.css';
 
-// Warm custom marker
 const makeHotelIcon = (color, emoji) => L.divIcon({
   className: 'warm-marker',
   html: `<div style="
@@ -37,21 +41,35 @@ const customerIcon = L.divIcon({
   iconAnchor: [9, 9]
 });
 
+const BUDGET_OPTIONS = [
+  { id: 'all',     label: 'All Prices',         icon: '🍽️' },
+  { id: 'budget',  label: 'Under KSh 700',      icon: '🪙' },
+  { id: 'mid',     label: 'KSh 700 – 1,500',    icon: '💵' },
+  { id: 'premium', label: 'KSh 1,500 – 3,000',  icon: '💎' },
+  { id: 'luxury',  label: 'KSh 3,000+',         icon: '👑' }
+];
+
+const CATEGORY_ICONS = {
+  pizza: '🍕', burgers: '🍔', burger: '🍔',
+  chicken: '🍗', pasta: '🍝', sushi: '🍣',
+  sides: '🍟', fries: '🍟', salads: '🥗', salad: '🥗',
+  soups: '🍲', soup: '🍲', desserts: '🍰', dessert: '🍰',
+  beverages: '🥤', drinks: '🥤', wraps: '🌯', wrap: '🌯',
+  sandwiches: '🥪', appetizers: '🥟', main: '🍽️'
+};
+
+const getCategoryIcon = (c) => CATEGORY_ICONS[(c || '').toLowerCase().trim()] || '🍽️';
+
 function Home() {
   const [hotels, setHotels] = useState([]);
   const [offerItem, setOfferItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [budget, setBudget] = useState('all');
+  const [budgetItems, setBudgetItems] = useState([]);
+  const [budgetLoading, setBudgetLoading] = useState(false);
+  const [budgetSearch, setBudgetSearch] = useState('');
   const [userLocation] = useState({ lat: -1.286389, lng: 36.817223 });
   const navigate = useNavigate();
-
-  const budgetOptions = [
-    { id: 'all', label: 'All Prices', icon: '🍽️' },
-    { id: 'budget', label: 'Under KSh 700', icon: '🪙' },
-    { id: 'mid', label: 'KSh 700 – 1,500', icon: '💵' },
-    { id: 'premium', label: 'KSh 1,500 – 3,000', icon: '💎' },
-    { id: 'luxury', label: 'KSh 3,000+', icon: '👑' },
-  ];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,18 +93,84 @@ function Home() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (budget === 'all') {
+      setBudgetItems([]);
+      return;
+    }
+    const fetchFiltered = async () => {
+      setBudgetLoading(true);
+      try {
+        const res = await axios.get(
+          `http://localhost:5000/api/food-items/by-budget?range=${budget}`
+        );
+        setBudgetItems(res.data.items || []);
+      } catch (err) {
+        console.error(err);
+        setBudgetItems([]);
+      } finally {
+        setBudgetLoading(false);
+      }
+    };
+    fetchFiltered();
+  }, [budget]);
+
   const calculateDistance = (lat1, lng1, lat2, lng2) => {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  const hotelsWithDistance = hotels.map(h => ({
-    ...h,
-    distance: calculateDistance(userLocation.lat, userLocation.lng, h.latitude || -1.286389, h.longitude || 36.817223)
-  })).sort((a, b) => a.distance - b.distance);
+  const hotelsWithDistance = useMemo(() => {
+    return hotels.map(h => ({
+      ...h,
+      distance: calculateDistance(
+        userLocation.lat,
+        userLocation.lng,
+        h.latitude || -1.286389,
+        h.longitude || 36.817223
+      )
+    })).sort((a, b) => a.distance - b.distance);
+  }, [hotels, userLocation]);
+
+  const filteredBudgetItems = useMemo(() => {
+    if (!budgetSearch.trim()) return budgetItems;
+    const q = budgetSearch.toLowerCase();
+    return budgetItems.filter(it =>
+      it.name.toLowerCase().includes(q) ||
+      it.hotel_name.toLowerCase().includes(q) ||
+      (it.category || '').toLowerCase().includes(q)
+    );
+  }, [budgetItems, budgetSearch]);
+
+  const budgetByHotel = useMemo(() => {
+    const map = new Map();
+    filteredBudgetItems.forEach(item => {
+      if (!map.has(item.hotel_id)) {
+        map.set(item.hotel_id, {
+          hotel_id: item.hotel_id,
+          hotel_name: item.hotel_name,
+          hotel_emoji: item.hotel_emoji,
+          hotel_color: item.hotel_color,
+          hotel_vibe: item.hotel_vibe,
+          cuisine_type: item.cuisine_type,
+          hotel_rating: item.hotel_rating,
+          delivery_time_min: item.delivery_time_min,
+          delivery_time_max: item.delivery_time_max,
+          items: []
+        });
+      }
+      map.get(item.hotel_id).items.push(item);
+    });
+    return Array.from(map.values());
+  }, [filteredBudgetItems]);
+
+  const formatKSh = (n) => `KSh ${Math.round(parseFloat(n || 0)).toLocaleString()}`;
+  const getBudgetMeta = () => BUDGET_OPTIONS.find(b => b.id === budget);
 
   if (loading) {
     return (
@@ -96,8 +180,6 @@ function Home() {
       </div>
     );
   }
-
-  const formatKSh = (n) => `KSh ${Math.round(parseFloat(n)).toLocaleString()}`;
 
   return (
     <div className="home-warm">
@@ -123,8 +205,8 @@ function Home() {
               <Link to="/hotels" className="btn-primary-warm">
                 Browse Restaurants <FaArrowRight />
               </Link>
-              <a href="#nearby" className="btn-ghost-warm">
-                <FaMapMarkerAlt /> See Nearby
+              <a href="#budget" className="btn-ghost-warm">
+                <FaSearch /> Filter by Budget
               </a>
             </div>
             <div className="hero-trust">
@@ -143,10 +225,10 @@ function Home() {
               <div className="hero-offer-card">
                 <span className="hero-offer-tag">Today's Special</span>
                 <div className="hero-offer-img">
-                  <img
+                  <LazyImage
                     src={offerItem.image_url}
                     alt={offerItem.name}
-                    onError={(e) => e.target.src = `https://via.placeholder.com/400x300/F5EFE6/C97B5F?text=${offerItem.name}`}
+                    aspectRatio="16/9"
                   />
                 </div>
                 <div className="hero-offer-body">
@@ -167,23 +249,167 @@ function Home() {
       </section>
 
       {/* BUDGET */}
-      <section className="budget-warm">
+      <section className="budget-warm" id="budget">
         <div className="sec-head">
           <h2>What's your budget today?</h2>
-          <p>We'll show you places that match your wallet.</p>
+          <p>Tap a range to see every dish in that price bracket — and where it's from.</p>
         </div>
         <div className="budget-pills">
-          {budgetOptions.map(opt => (
+          {BUDGET_OPTIONS.map(opt => (
             <button
               key={opt.id}
               className={`budget-pill ${budget === opt.id ? 'active' : ''}`}
-              onClick={() => setBudget(opt.id)}
+              onClick={() => {
+                setBudget(opt.id);
+                setBudgetSearch('');
+                if (opt.id !== 'all') {
+                  setTimeout(() => {
+                    document.getElementById('budget-results')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start'
+                    });
+                  }, 120);
+                }
+              }}
             >
               <span>{opt.icon}</span> {opt.label}
             </button>
           ))}
         </div>
       </section>
+
+      {/* BUDGET RESULTS */}
+      {budget !== 'all' && (
+        <section className="budget-results-warm" id="budget-results">
+          <div className="br-header">
+            <div>
+              <h2>
+                {getBudgetMeta()?.icon} Dishes in {getBudgetMeta()?.label}
+              </h2>
+              <p>
+                {budgetLoading
+                  ? 'Loading…'
+                  : `${filteredBudgetItems.length} dish${filteredBudgetItems.length !== 1 ? 'es' : ''} across ${budgetByHotel.length} restaurant${budgetByHotel.length !== 1 ? 's' : ''}`}
+              </p>
+            </div>
+            <button
+              className="br-clear"
+              onClick={() => {
+                setBudget('all');
+                setBudgetSearch('');
+              }}
+            >
+              <FaTimes /> Clear filter
+            </button>
+          </div>
+
+          {!budgetLoading && budgetItems.length > 0 && (
+            <div className="br-search">
+              <FaSearch />
+              <input
+                type="text"
+                placeholder="Search within results (dish or restaurant)…"
+                value={budgetSearch}
+                onChange={(e) => setBudgetSearch(e.target.value)}
+              />
+              {budgetSearch && (
+                <button className="br-search-clear" onClick={() => setBudgetSearch('')}>
+                  <FaTimes />
+                </button>
+              )}
+            </div>
+          )}
+
+          {budgetLoading ? (
+            <div className="budget-loading">
+              <div className="spinner"></div>
+              <p>Finding dishes…</p>
+            </div>
+          ) : budgetByHotel.length === 0 ? (
+            <div className="budget-empty">
+              <div className="be-icon">🍽️</div>
+              <h3>No dishes in this range</h3>
+              <p>Try a different price bracket above.</p>
+            </div>
+          ) : (
+            <div className="budget-hotel-groups">
+              {budgetByHotel.map(group => (
+                <div
+                  className="budget-hotel-block"
+                  key={group.hotel_id}
+                  style={{ '--hotel-color': group.hotel_color || '#C97B5F' }}
+                >
+                  <Link to={`/hotel/${group.hotel_id}`} className="bhb-head">
+                    <div className="bhb-emoji">{group.hotel_emoji || '🍽️'}</div>
+                    <div className="bhb-info">
+                      <div className="bhb-vibe">{group.hotel_vibe || group.cuisine_type}</div>
+                      <h3>{group.hotel_name}</h3>
+                      <div className="bhb-meta">
+                        <span>
+                          <FaStar style={{ color: '#FFC107' }} />
+                          {group.hotel_rating || 'New'}
+                        </span>
+                        <span>
+                          <FaClock /> {group.delivery_time_min || 20}–{group.delivery_time_max || 40} min
+                        </span>
+                        <span><FaMotorcycle /> Free</span>
+                      </div>
+                    </div>
+                    <div className="bhb-arrow">
+                      View Menu <FaArrowRight />
+                    </div>
+                  </Link>
+
+                  <div className="bhb-items">
+                    {group.items.map(item => {
+                      const hasDiscount = item.is_on_offer && item.discount_percent > 0;
+                      const finalPrice = hasDiscount
+                        ? item.price * (1 - item.discount_percent / 100)
+                        : item.price;
+
+                      return (
+                        <Link
+                          to={`/hotel/${item.hotel_id}`}
+                          key={item.id}
+                          className="budget-dish-card"
+                        >
+                          <div className="bdc-img">
+                            <LazyImage
+                              src={item.image_url}
+                              alt={item.name}
+                              aspectRatio="1/1"
+                            />
+                            {hasDiscount && (
+                              <span className="bdc-offer">
+                                <FaFire /> -{item.discount_percent}%
+                              </span>
+                            )}
+                          </div>
+                          <div className="bdc-info">
+                            <div className="bdc-cat">
+                              {getCategoryIcon(item.category)} {item.category}
+                            </div>
+                            <h4>{item.name}</h4>
+                            <p className="bdc-desc">
+                              {item.description || 'Delicious dish, freshly prepared.'}
+                            </p>
+                            <div className="bdc-price-row">
+                              <span className="bdc-price">{formatKSh(finalPrice)}</span>
+                              {hasDiscount && (
+                                <span className="bdc-original">{formatKSh(item.price)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* MAP */}
       <section className="map-warm" id="nearby">
@@ -264,23 +490,37 @@ function Home() {
               }}
             >
               <div className="hc-image-warm">
-                <img
-                  src={`https://picsum.photos/seed/hotel${hotel.id}/500/360`}
+                <LazyImage
+                  src={hotel.hero_image_url || `https://picsum.photos/seed/hotel${hotel.id}/500/360`}
                   alt={hotel.name}
-                  onError={(e) => e.target.src = `https://via.placeholder.com/500x360/F5EFE6/C97B5F?text=${hotel.name}`}
+                  aspectRatio="5/3.6"
                 />
                 <span className="hc-emoji">{hotel.emoji || '🍽️'}</span>
                 <span className="hc-distance">
                   <FaMapMarkerAlt /> {hotel.distance.toFixed(1)} km
                 </span>
+                <div
+                  className="hc-overlay-grad"
+                  style={{
+                    background: `linear-gradient(to top, ${hotel.brand_color}99 0%, transparent 60%)`
+                  }}
+                ></div>
               </div>
               <div className="hc-body-warm">
-                <span className="hc-vibe">{hotel.vibe || 'Signature'}</span>
+                <span className="hc-vibe" style={{ background: hotel.brand_color }}>
+                  {hotel.vibe || 'Signature'}
+                </span>
                 <h3>{hotel.name}</h3>
-                <p className="hc-cuisine">{hotel.cuisine_type}</p>
+                <p className="hc-tagline">{hotel.tagline || hotel.cuisine_type}</p>
                 <div className="hc-meta-warm">
-                  <span><FaStar style={{ color: '#C9A961' }} /> {hotel.rating || 'New'}</span>
-                  <span><FaClock /> 20–30 min</span>
+                  <span>
+                    <FaStar style={{ color: '#FFD700' }} />
+                    {hotel.rating || 'New'}
+                    <em>({hotel.rating_count || 0})</em>
+                  </span>
+                  <span>
+                    <FaClock /> {hotel.delivery_time_min || 20}–{hotel.delivery_time_max || 40} min
+                  </span>
                   <span><FaMotorcycle /> Free</span>
                 </div>
               </div>

@@ -1,0 +1,118 @@
+.cropper-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(45, 42, 38, 0.75);
+  backdrop-filter: blur(10px);
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 200ms var(--ease) both;
+}
+
+.cropper-modal {
+  background: var(--white);
+  border-radius: var(--r-2xl);
+  width: 100%;
+  max-width: 700px;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  animation: slideUp 300ms var(--ease) both;
+}
+
+.cropper-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.4rem 1.6rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cropper-header h3 {
+  font-family: 'Fraunces', serif;
+  font-size: 1.15rem;
+}
+
+.cropper-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--cream-2);
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 240ms var(--ease-soft);
+}
+
+.cropper-close:hover {
+  background: var(--rose-tint);
+  color: var(--rose-dark);
+  transform: rotate(90deg);
+}
+
+.cropper-stage {
+  position: relative;
+  height: 380px;
+  background: var(--charcoal);
+}
+
+.cropper-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.6rem;
+  border-bottom: 1px solid var(--border-soft);
+  gap: 1rem;
+}
+
+.cropper-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.cropper-zoom input[type="range"] {
+  flex: 1;
+  accent-color: var(--terracotta);
+}
+
+.cropper-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--charcoal-soft);
+  border-radius: var(--r-pill);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 240ms var(--ease-soft);
+  font-family: inherit;
+}
+
+.cropper-reset:hover {
+  border-color: var(--terracotta);
+  color: var(--terracotta);
+}
+
+.cropper-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  padding: 1.2rem 1.6rem;
+}
+
+@media (max-width: 640px) {
+  .cropper-modal { max-height: 100vh; border-radius: 0; }
+  .cropper-stage { height: 280px; }
+  .cropper-controls { flex-direction: column; }
+}
