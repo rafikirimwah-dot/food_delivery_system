@@ -10,11 +10,13 @@ const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const stripe = require('stripe');
 const { processAndStoreImage, deleteImage, STORAGE_MODE } = require('./storage');
 
 dotenv.config();
 
 const app = express();
+const stripeClient = stripe(process.env.STRIPE_SECRET_KEY);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -891,6 +893,68 @@ app.get('/api/orders/:id/payment-status', authenticate, authorize('user'), async
     }
 });
 
+// Stripe Payment Intent endpoint
+app.post('/api/stripe/create-payment-intent', authenticate, authorize('user'), async (req, res) => {
+    try {
+        const { amount, orderId, description } = req.body;
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ message: 'Invalid amount' });
+        }
+
+        // Create payment intent
+        const paymentIntent = await stripeClient.paymentIntents.create({
+            amount: Math.round(amount * 100), // Convert to cents
+            currency: 'usd',
+            metadata: {
+                orderId: orderId,
+                userId: req.user.id,
+                description: description || `Order #${orderId}`
+            },
+            description: description || `Order #${orderId} payment`
+        });
+
+        res.json({
+            clientSecret: paymentIntent.client_secret,
+            paymentIntentId: paymentIntent.id
+        });
+    } catch (error) {
+        console.error('Stripe error:', error);
+        res.status(500).json({ message: 'Failed to create payment intent', error: error.message });
+    }
+});
+
+// Stripe Webhook endpoint (for production use)
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    
+    try {
+        const event = stripeClient.webhooks.constructEvent(
+            req.body,
+            sig,
+            process.env.STRIPE_WEBHOOK_SECRET || 'test_secret'
+        );
+
+        if (event.type === 'payment_intent.succeeded') {
+            const paymentIntent = event.data.object;
+            const { orderId } = paymentIntent.metadata;
+
+            // Update order payment status
+            await db.promise().query(
+                'UPDATE orders SET payment_status = ?, stripe_payment_id = ? WHERE id = ?',
+                ['paid', paymentIntent.id, orderId]
+            );
+
+            console.log(`✅ Payment succeeded for order ${orderId}`);
+        }
+
+        res.json({ received: true });
+    } catch (error) {
+        console.error('Webhook error:', error);
+        res.status(400).send(`Webhook Error: ${error.message}`);
+    }
+});
+
 const http = require('http');
 const { initSocket, emitToUser, emitToRole } = require('./socket');
 
@@ -1027,6 +1091,45 @@ app.get('/api/hotels/budget/:range', (req, res) => {
     db.query(query, [range[0], range[1]], (err, results) => {
         if (err) return res.status(500).json({ message: 'Database error' });
         res.json(results);
+    });
+});
+
+// Budget-filtered food items endpoint
+app.get('/api/food-items/by-budget', (req, res) => {
+    const { range = 'all' } = req.query;
+    
+    const ranges = {
+        'budget': [0, 700],
+        'mid': [700, 1500],
+        'premium': [1500, 3000],
+        'luxury': [3000, 100000]
+    };
+    
+    const priceRange = ranges[range];
+    if (!priceRange) return res.status(400).json({ message: 'Invalid budget range' });
+    
+    const query = `
+        SELECT 
+            fi.id, fi.name, fi.price, fi.description, fi.category, fi.image_url,
+            fi.is_available, fi.is_on_offer, fi.discount_percent, fi.hotel_id,
+            h.name as hotel_name, h.emoji as hotel_emoji, h.brand_color as hotel_color,
+            h.cuisine_type, h.rating as hotel_rating, h.vibe as hotel_vibe,
+            h.delivery_time_min, h.delivery_time_max
+        FROM food_items fi
+        JOIN hotels h ON fi.hotel_id = h.id
+        WHERE CAST(fi.price AS DECIMAL(10,2)) BETWEEN ? AND ? 
+          AND fi.is_available = TRUE 
+          AND h.is_active = TRUE
+        ORDER BY CAST(fi.price AS DECIMAL(10,2)) ASC, fi.name ASC
+        LIMIT 100
+    `;
+    
+    db.query(query, [priceRange[0], priceRange[1]], (err, items) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ message: 'Database error' });
+        }
+        res.json({ items: items || [] });
     });
 });
 
@@ -1797,8 +1900,8 @@ app.get('/api/hotels/search', (req, res) => {
       h.*,
       COALESCE((SELECT COUNT(*) FROM orders o WHERE o.hotel_id = h.id AND o.status = 'completed'), 0) AS order_count,
       COALESCE((SELECT AVG(r.rating) FROM ratings r WHERE r.hotel_id = h.id AND r.is_visible = TRUE), h.rating, 0) AS effective_rating,
-      COALESCE((SELECT MIN(fi.price) FROM food_items fi WHERE fi.hotel_id = h.id AND fi.is_available = TRUE), 0) AS min_dish_price,
-      COALESCE((SELECT MAX(fi.price) FROM food_items fi WHERE fi.hotel_id = h.id AND fi.is_available = TRUE), 0) AS max_dish_price
+      COALESCE((SELECT MIN(CAST(fi.price AS DECIMAL(10,2))) FROM food_items fi WHERE fi.hotel_id = h.id AND fi.is_available = TRUE), 0) AS min_dish_price,
+      COALESCE((SELECT MAX(CAST(fi.price AS DECIMAL(10,2))) FROM food_items fi WHERE fi.hotel_id = h.id AND fi.is_available = TRUE), 0) AS max_dish_price
     FROM hotels h
     WHERE h.is_active = TRUE
   `;
@@ -1809,7 +1912,7 @@ app.get('/api/hotels/search', (req, res) => {
       SELECT 1 FROM food_items fi
       WHERE fi.hotel_id = h.id 
         AND fi.is_available = TRUE
-        AND fi.price BETWEEN ? AND ?
+        AND CAST(fi.price AS DECIMAL(10,2)) BETWEEN ? AND ?
     )`;
     params.push(parseFloat(minPrice), parseFloat(maxPrice));
   }
@@ -1943,7 +2046,5 @@ app.get('/api/hotels/search', (req, res) => {
     }
   });
 });
-    });
-  });
-});
-});
+
+// ========== NEW: Order Tracking ==========

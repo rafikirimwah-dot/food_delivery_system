@@ -45,12 +45,21 @@ function HotelMenu() {
   const [filtered, setFiltered] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [search, setSearch] = useState('');
+  const [priceFilter, setPriceFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState({});
   const [imageErrors, setImageErrors] = useState({});
   const { addToCart } = useContext(CartContext);
   const { showToast } = useToast();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+  const PRICE_RANGES = [
+    { id: 'all', label: 'All Prices', min: null, max: null },
+    { id: 'budget', label: 'Under KSh 500', min: 0, max: 500 },
+    { id: 'mid', label: 'KSh 500 – 1,000', min: 500, max: 1000 },
+    { id: 'premium', label: 'KSh 1,000 – 2,000', min: 1000, max: 2000 },
+    { id: 'luxury', label: 'KSh 2,000+', min: 2000, max: 999999 }
+  ];
 
   useEffect(() => {
     const fetchMenu = async () => {
@@ -80,17 +89,36 @@ function HotelMenu() {
   }, [id, showToast]);
 
   useEffect(() => {
-    let r = menu;
-    if (selectedCategory !== 'All') r = r.filter(i => i.category === selectedCategory);
-    if (search.trim()) {
-      const t = search.toLowerCase();
-      r = r.filter(i =>
-        i.name.toLowerCase().includes(t) ||
-        (i.description || '').toLowerCase().includes(t)
-      );
+    let r = [...menu]; // Create a copy
+    
+    // Category filter
+    if (selectedCategory !== 'All') {
+      r = r.filter(i => (i.category || '').toLowerCase().trim() === selectedCategory.toLowerCase());
     }
+    
+    // Price filter
+    if (priceFilter !== 'all') {
+      const range = PRICE_RANGES.find(p => p.id === priceFilter);
+      if (range && range.min !== null && range.max !== null) {
+        r = r.filter(i => {
+          const price = parseFloat(i.price) || 0;
+          return price >= range.min && price <= range.max;
+        });
+      }
+    }
+    
+    // Search filter
+    if (search.trim()) {
+      const t = search.toLowerCase().trim();
+      r = r.filter(i => {
+        const name = (i.name || '').toLowerCase();
+        const desc = (i.description || '').toLowerCase();
+        return name.includes(t) || desc.includes(t);
+      });
+    }
+    
     setFiltered(r);
-  }, [selectedCategory, search, menu]);
+  }, [selectedCategory, search, menu, priceFilter]);
 
   const categories = ['All', ...new Set(menu.map(i => i.category))];
   const formatKSh = (n) => `KSh ${Math.round(parseFloat(n)).toLocaleString()}`;
@@ -241,20 +269,32 @@ function HotelMenu() {
               </button>
             ))}
           </div>
-          <div className="menu-search-warm">
-            <FaSearch />
-            <input
-              type="text"
-              placeholder="Search menu…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+          <div className="menu-filters-row">
+            <div className="menu-search-warm">
+              <FaSearch />
+              <input
+                type="text"
+                placeholder="Search menu…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <select 
+              className="menu-price-filter"
+              value={priceFilter} 
+              onChange={e => setPriceFilter(e.target.value)}
+            >
+              {PRICE_RANGES.map(p => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
           </div>
         </div>
 
         <div className="menu-count-warm">
           <strong>{filtered.length}</strong> item{filtered.length !== 1 && 's'}
           {selectedCategory !== 'All' && ` · ${selectedCategory}`}
+          {priceFilter !== 'all' && ` · ${PRICE_RANGES.find(p => p.id === priceFilter)?.label}`}
         </div>
 
         <div className="menu-grid-warm">

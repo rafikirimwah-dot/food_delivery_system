@@ -1,32 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { GoogleMap, useJsApiLoader, Marker, Polyline } from '@react-google-maps/api';
 import { FaArrowLeft, FaPhone, FaCheckCircle, FaClock } from 'react-icons/fa';
 import axios from 'axios';
 import './OrderTracking.css';
 
-const riderIcon = L.divIcon({
-  className: 'rider-marker',
-  html: `<div style="
-    background: #C97B5F;
-    width: 48px; height: 48px;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.4rem;
-    box-shadow: 0 8px 24px rgba(201, 123, 95, 0.5);
-    border: 3px solid #FFFFFF;
-  ">🛵</div>`,
-  iconSize: [48, 48],
-  iconAnchor: [24, 24]
-});
+const mapContainerStyle = {
+  width: '100%',
+  height: '100%',
+};
 
 function OrderTracking() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [riderPos, setRiderPos] = useState(null);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
+  });
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -37,7 +29,7 @@ function OrderTracking() {
         });
         setOrder(res.data);
         if (res.data.delivery_person) {
-          setRiderPos([res.data.delivery_person.lat, res.data.delivery_person.lng]);
+          setRiderPos({ lat: res.data.delivery_person.lat, lng: res.data.delivery_person.lng });
         }
       } catch (err) {
         console.error(err);
@@ -61,8 +53,12 @@ function OrderTracking() {
 
   if (loading) return <div className="loading-container"><div className="spinner" /></div>;
   if (!order) return <div className="loading-container"><p>Order not found</p></div>;
+  if (loadError) return <div className="loading-container"><p>Error loading Google Maps. Please check your API key.</p></div>;
+  if (!isLoaded) return <div className="loading-container"><div className="spinner" /></div>;
 
   const currentIndex = steps.findIndex(s => s.key === order.status);
+  const hotelLocation = { lat: order.hotel_lat || -1.286389, lng: order.hotel_lng || 36.817223 };
+  const deliveryLocation = order.delivery_lat ? { lat: order.delivery_lat, lng: order.delivery_lng } : null;
 
   return (
     <div className="track-page-warm">
@@ -82,37 +78,74 @@ function OrderTracking() {
 
       <div className="track-grid-warm">
         <div className="track-map-warm">
-          <MapContainer
-            center={[order.hotel_lat || -1.286389, order.hotel_lng || 36.817223]}
+          <GoogleMap
+            mapContainerStyle={mapContainerStyle}
+            center={hotelLocation}
             zoom={14}
-            style={{ height: '100%', width: '100%' }}
-            scrollWheelZoom={false}
+            options={{
+              disableDefaultUI: false,
+              scrollwheel: false,
+            }}
           >
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-            <Marker position={[order.hotel_lat || -1.286389, order.hotel_lng || 36.817223]}>
-              <Popup>{order.hotel_name}</Popup>
-            </Marker>
-            {order.delivery_lat && (
-              <Marker position={[order.delivery_lat, order.delivery_lng]}>
-                <Popup>Your location</Popup>
-              </Marker>
-            )}
-            {riderPos && (
-              <Marker position={riderPos} icon={riderIcon}>
-                <Popup>James is on the way 🛵</Popup>
-              </Marker>
-            )}
-            {order.delivery_lat && riderPos && (
-              <Polyline
-                positions={[
-                  [order.hotel_lat || -1.286389, order.hotel_lng || 36.817223],
-                  riderPos,
-                  [order.delivery_lat, order.delivery_lng]
-                ]}
-                pathOptions={{ color: '#C97B5F', weight: 4, dashArray: '8, 8' }}
+            {/* Hotel marker */}
+            <Marker
+              position={hotelLocation}
+              title={order.hotel_name}
+              icon={{
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: 12,
+                fillColor: '#FF6B6B',
+                fillOpacity: 1,
+                strokeColor: '#FFFFFF',
+                strokeWeight: 2,
+              }}
+            />
+
+            {/* Delivery location marker */}
+            {deliveryLocation && (
+              <Marker
+                position={deliveryLocation}
+                title="Your location"
+                icon={{
+                  path: window.google.maps.SymbolPath.CIRCLE,
+                  scale: 12,
+                  fillColor: '#4ECDC4',
+                  fillOpacity: 1,
+                  strokeColor: '#FFFFFF',
+                  strokeWeight: 2,
+                }}
               />
             )}
-          </MapContainer>
+
+            {/* Rider marker */}
+            {riderPos && (
+              <Marker
+                position={riderPos}
+                title="Rider location"
+                icon={{
+                  path: window.google.maps.SymbolPath.CIRCLE,
+                  scale: 14,
+                  fillColor: '#C97B5F',
+                  fillOpacity: 1,
+                  strokeColor: '#FFFFFF',
+                  strokeWeight: 3,
+                }}
+              />
+            )}
+
+            {/* Route line */}
+            {deliveryLocation && riderPos && (
+              <Polyline
+                path={[hotelLocation, riderPos, deliveryLocation]}
+                options={{
+                  strokeColor: '#C97B5F',
+                  strokeOpacity: 0.8,
+                  strokeWeight: 3,
+                  geodesic: true,
+                }}
+              />
+            )}
+          </GoogleMap>
         </div>
 
         <aside className="track-side-warm">
